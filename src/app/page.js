@@ -1,5 +1,6 @@
 'use client'
 
+import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import SearchIcon from '@mui/icons-material/Search'
 import { Alert, Box, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -80,8 +81,25 @@ const ResultCard = ({ result, type }) => {
   const [downloadProgress, setDownloadProgress] = useState(null)
   const futureRelease = useFutureRelease(result, type)
   const [torrentId, setTorrentId] = useState(null)
+  const [existsInDb, setExistsInDb] = useState(false)
+
+  useEffect(() => {
+    const checkIfExists = async () => {
+      try {
+        const response = await fetch(`/api/library?tmdbId=${result.id}`)
+        const data = await response.json()
+        setExistsInDb(data.exists)
+      } catch (error) {
+        console.error('Error checking if movie exists in DB:', error)
+      }
+    }
+
+    checkIfExists()
+  }, [result.id])
 
   const handleCardClick = async () => {
+    if (existsInDb) return // Prevent action if movie exists in DB
+
     try {
       const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}`)
       const data = await response.json()
@@ -117,7 +135,7 @@ const ResultCard = ({ result, type }) => {
     <>
       <DownloadDialog open={open} onClose={() => setOpen(false)} futureRelease={futureRelease} result={result} type={type} />
       <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square relative">
-        <CardActionArea onClick={handleCardClick} className="h-full">
+        <CardActionArea onClick={handleCardClick} className="h-full" disabled={existsInDb}>
           <CardMedia
             component="img"
             className="h-auto max-h-[25vh] !object-contain object-top"
@@ -134,6 +152,9 @@ const ResultCard = ({ result, type }) => {
                 : (result.name === result.original_name ? result.name : `${result.name} / ${result.original_name}`)}
             </Typography>
           </CardContent>
+          {existsInDb && (
+            <CheckCircleIcon sx={{ position: 'absolute', top: 8, right: 8, color: 'green' }} />
+          )}
         </CardActionArea>
         {downloadProgress !== null && (
           <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
