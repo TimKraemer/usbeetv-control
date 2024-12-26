@@ -6,7 +6,8 @@
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "release": "git push release main:release"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",

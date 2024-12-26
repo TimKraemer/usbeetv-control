@@ -9,8 +9,6 @@ RUN apt-get update && apt-get --yes install git
 FROM git AS deps
 WORKDIR /app
 
-# Install yarn
-RUN npm install -g yarn
 
 COPY package.json yarn.lock ./
 
@@ -23,8 +21,7 @@ RUN \
 FROM git AS builder
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g yarn
+# RUN npm install -g yarn
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
