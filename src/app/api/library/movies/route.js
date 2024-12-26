@@ -25,7 +25,6 @@ export async function GET(req) {
         const data = await response.json()
         const items = data.Items || []
 
-        // Use for..of loop as preferred
         let exists = false
         for (const item of items) {
             if (item.ProviderIds?.Tmdb === tmdbId) {

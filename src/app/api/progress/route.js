@@ -7,7 +7,7 @@ async function getTorrentProgress(sessionId, torrentId) {
         headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
         body: JSON.stringify({
             method: 'web.get_torrent_status',
-            params: [torrentId, ['progress']],
+            params: [torrentId, ['progress', 'eta']],
             id: 4
         })
     })
@@ -15,7 +15,7 @@ async function getTorrentProgress(sessionId, torrentId) {
     const result = await response.json()
     if (result.error) throw new Error(`Error fetching torrent status: ${result.error}`)
 
-    return result.result.progress
+    return { progress: result.result.progress, eta: result.result.eta }
 }
 
 export async function GET(request) {
@@ -28,8 +28,8 @@ export async function GET(request) {
 
     try {
         const sessionId = await authenticateDeluge()
-        const progress = await getTorrentProgress(sessionId, torrentId)
-        return NextResponse.json({ progress })
+        const { progress, eta } = await getTorrentProgress(sessionId, torrentId)
+        return NextResponse.json({ progress, eta })
     } catch (error) {
         return NextResponse.json({ error: `Error fetching progress: ${error.message}` }, { status: 500 })
     }

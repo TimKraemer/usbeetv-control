@@ -1,0 +1,30 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.7.1/schema.json",
+  "files": {
+    "ignore": ["vendor/*.*"]
+  },
+  "organizeImports": {
+    "enabled": true
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": { "noUndeclaredVariables": "error" },
+      "suspicious": { "noConsoleLog": "warn" }
+    }
+  },
+  "vcs": {
+    "clientKind": "git",
+    "enabled": true,
+    "useIgnoreFile": true
+  },
+  "formatter": {
+    "indentStyle": "space"
+  },
+  "javascript": {
+    "formatter": {
+      "semicolons": "asNeeded"
+    }
+  }
+}
