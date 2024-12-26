@@ -63,7 +63,6 @@ async function sendToDeluge(torrentUrl, type) {
         const sessionId = await authenticateDeluge()
         const torrentPath = await downloadTorrent(sessionId, torrentUrl)
         const addedTorrents = await addTorrent(sessionId, torrentPath, type)
-        // TODO: call jellyfin to rescan the fitting library
         return NextResponse.json({ hash: addedTorrents.result[0][1] })
     } catch (error) {
         return NextResponse.json({ message: `Error Deluge: ${error.message}` })
@@ -80,15 +79,39 @@ export async function GET(request) {
     }
 
     try {
-        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=9,53`)
+        const category = type === 'movie' ? '9' : '55'
+        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${category}`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         const data = await response.json()
         if (data.count === 0) return NextResponse.json({ error: 'No results found' }, { status: 404 })
 
-        const filteredRows = data.rows.filter(row => row.trumped === 0 && row.seeders !== 0 && row.numfiles < 5)
+        const filteredRows = data.rows.filter(row => row.trumped === 0 && row.seeders !== 0 && (type !== 'movie' || row.numfiles < 5))
         filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
 
+        if (type === 'tv') {
+            const seasonMap = new Map()
+
+            for (const row of filteredRows) {
+                const seasonMatch = row.name.match(/S\d{2}/)
+                if (seasonMatch) {
+                    const season = seasonMatch[0]
+                    if (!seasonMap.has(season) || rankRow(row) > rankRow(seasonMap.get(season))) {
+                        seasonMap.set(season, row)
+                    }
+                }
+            }
+
+            const bestRows = Array.from(seasonMap.values())
+            const results = []
+
+            for (const bestRow of bestRows) {
+                const result = await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
+                results.push(result)
+            }
+
+            return NextResponse.json({ filteredRows, results, bestRows })
+        }
         const bestRow = filteredRows[0]
         return await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
     } catch (error) {
