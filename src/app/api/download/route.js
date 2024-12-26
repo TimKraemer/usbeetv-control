@@ -59,8 +59,23 @@ export async function GET(request) {
         })
 
         const bestRow = filteredRows[0]
+        // return NextResponse.json(bestRow.id)
 
-        return NextResponse.json(bestRow)
+        const downloadResponse = await axios.get("https://torrent-syndikat.org/download.php", {
+            params: {
+                id: bestRow.id,
+                apikey: process.env.TS_API_KEY,
+            },
+            responseType: 'arraybuffer'
+        })
+
+        const fileName = `${bestRow.name}.torrent`
+        return new NextResponse(downloadResponse.data, {
+            headers: {
+                'Content-Type': 'application/x-bittorrent',
+                'Content-Disposition': `attachment; filename="${fileName}"`,
+            },
+        })
     } catch (error) {
         return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
     }

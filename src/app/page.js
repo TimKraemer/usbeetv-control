@@ -32,11 +32,24 @@ const ResultCard = ({ result, type }) => {
   const handleCardClick = async () => {
     try {
       const response = await fetch(`/api/download?tmdbId=${result.id}`)
-      const data = await response.json()
-      if (data.error) {
-        setOpen(true)
+      if (response.headers.get('Content-Type') === 'application/x-bittorrent') {
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        const contentDisposition = response.headers.get('Content-Disposition')
+        const fileNameMatch = contentDisposition?.match(/filename="(.+)"/)
+        const fileName = fileNameMatch ? fileNameMatch[1] : `${result.name}.torrent`
+        a.download = fileName
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
       } else {
-        console.log(data)
+        const data = await response.json()
+        if (data.error) {
+          setOpen(true)
+        }
       }
     } catch (error) {
       console.error('Error fetching download data:', error)
@@ -191,6 +204,10 @@ export default function Home() {
           {error && <p className="text-red-500">{error}</p>}
           {loading ? (
             <CircularProgress />
+          ) : searchString === '' ? (
+            <div className="flex flex-col gap-4 w-full h-full">
+              <p className="text-gray-500">Um dem USBee TV einen Film oder eine Serie hinzuzufügen, suche ihn zunächst mit der Suchbox und tippe dann auf den gewünschten Titel.</p>
+            </div>
           ) : (
             <div className="flex flex-col gap-4 w-full h-full">
               <ResultsSection title="Filme" results={movieResults} type="movie" />
