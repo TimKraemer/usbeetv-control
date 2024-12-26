@@ -11,17 +11,20 @@ export async function GET(request) {
     }
 
     try {
-        const tmdbResponse = await fetch(`https://api.themoviedb.org/3/search/${searchType}?query=${searchstring}&language=${language}&api_key=${process.env.TMDB_API_KEY}`)
+        const response = await fetch(`https://api.themoviedb.org/3/search/${searchType}?query=${searchstring}&language=${language}&api_key=${process.env.TMDB_API_KEY}`)
 
-        if (!tmdbResponse.ok) {
-            throw new Error(`HTTP error! status: ${tmdbResponse.status}`)
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`)
         }
 
+        const tmdbResults = await response.json()
 
-        const response = NextResponse.json(tmdbResponse)
-        response.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400')
+        const result = NextResponse.json({
+            tmdbResults,
+        })
+        result.headers.set('Cache-Control', 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400')
 
-        return response
+        return result
     } catch (error) {
         return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
     }

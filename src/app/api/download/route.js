@@ -60,14 +60,15 @@ async function addTorrent(sessionId, torrentPath, type) {
     if (!response.ok) throw new Error(`Failed to add torrent: HTTP ${response.status} - ${await response.text()}`)
     const result = await response.json()
     if (result.error) throw new Error(`Error adding torrent: ${result.error}`)
+    return result
 }
 
 async function sendToDeluge(torrentUrl, type) {
     try {
         const sessionId = await authenticateDeluge()
         const torrentPath = await downloadTorrent(sessionId, torrentUrl)
-        await addTorrent(sessionId, torrentPath, type)
-        return NextResponse.json({ message: 'Torrent added successfully' })
+        const addedTorrents = await addTorrent(sessionId, torrentPath, type)
+        return NextResponse.json({ hash: addedTorrents.result[0][1] })
     } catch (error) {
         return NextResponse.json({ message: `Error Deluge: ${error.message}` })
     }

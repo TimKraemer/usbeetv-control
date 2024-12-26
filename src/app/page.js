@@ -48,21 +48,40 @@ const DownloadDialog = ({ open, onClose, futureRelease, result, type }) => (
 
 const ResultCard = ({ result, type }) => {
   const [open, setOpen] = useState(false)
+  const [downloadProgress, setDownloadProgress] = useState(null)
   const futureRelease = useFutureRelease(result, type)
 
   const handleCardClick = async () => {
     try {
       const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}`)
-
       const data = await response.json()
       if (data.error) {
         setOpen(true)
       } else {
         console.log(data)
+        if (data.hash) {
+          startTrackingProgress(data.hash)
+        }
       }
     } catch (error) {
       console.error('Error fetching download:', error)
     }
+  }
+
+  const fetchDownloadProgress = async (torrentId) => {
+    try {
+      const response = await fetch(`/api/progress?torrentId=${torrentId}`)
+      const data = await response.json()
+      setDownloadProgress(data.progress)
+    } catch (error) {
+      console.error('Error fetching download progress:', error)
+    }
+  }
+
+  const startTrackingProgress = (torrentId) => {
+    useInterval(() => {
+      fetchDownloadProgress(torrentId)
+    }, 5000)
   }
 
   return (
@@ -85,6 +104,11 @@ const ResultCard = ({ result, type }) => {
                 ? (result.title === result.original_title ? result.title : `${result.title} / ${result.original_title}`)
                 : (result.name === result.original_name ? result.name : `${result.name} / ${result.original_name}`)}
             </Typography>
+            {downloadProgress !== null && (
+              <Typography variant="body2" color="textSecondary">
+                Download Progress: {downloadProgress}%
+              </Typography>
+            )}
           </CardContent>
         </CardActionArea>
       </Card>
