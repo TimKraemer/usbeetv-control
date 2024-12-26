@@ -1,12 +1,40 @@
 'use client'
 
 import SearchIcon from '@mui/icons-material/Search'
-import { Alert, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { useCallback, useEffect, useState } from 'react'
 import Flag from 'react-flagkit'
 import { useInterval } from 'react-use'
+
+function CircularProgressWithLabel(props) {
+  return (
+    <Box sx={{ position: 'relative', display: 'inline-flex' }}>
+      <CircularProgress variant="determinate" {...props} />
+      <Box
+        sx={{
+          top: 0,
+          left: 0,
+          bottom: 0,
+          right: 0,
+          position: 'absolute',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Typography
+          variant="caption"
+          component="div"
+          sx={{ color: 'text.secondary' }}
+        >
+          {`${Math.round(props.value)}%`}
+        </Typography>
+      </Box>
+    </Box>
+  )
+}
 
 const darkTheme = createTheme({
   palette: {
@@ -60,7 +88,6 @@ const ResultCard = ({ result, type }) => {
       if (data.error) {
         setOpen(true)
       } else {
-        console.log(data)
         if (data.hash) {
           setTorrentId(data.hash)
         }
@@ -89,7 +116,7 @@ const ResultCard = ({ result, type }) => {
   return (
     <>
       <DownloadDialog open={open} onClose={() => setOpen(false)} futureRelease={futureRelease} result={result} type={type} />
-      <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square">
+      <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square relative">
         <CardActionArea onClick={handleCardClick} className="h-full">
           <CardMedia
             component="img"
@@ -106,13 +133,13 @@ const ResultCard = ({ result, type }) => {
                 ? (result.title === result.original_title ? result.title : `${result.title} / ${result.original_title}`)
                 : (result.name === result.original_name ? result.name : `${result.name} / ${result.original_name}`)}
             </Typography>
-            {downloadProgress !== null && (
-              <Typography variant="body2" color="textSecondary">
-                Download Progress: {downloadProgress}%
-              </Typography>
-            )}
           </CardContent>
         </CardActionArea>
+        {downloadProgress !== null && (
+          <Box sx={{ position: 'absolute', top: 0, left: 0, right: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <CircularProgressWithLabel value={downloadProgress} />
+          </Box>
+        )}
       </Card>
     </>
   )
