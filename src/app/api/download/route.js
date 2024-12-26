@@ -41,8 +41,12 @@ async function addTorrent(sessionId, torrentPath, type) {
             params: [[{
                 path: torrentPath,
                 options: {
-                    move_completed: true,
-                    move_completed_path: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
+                    move_completed: false,
+                    // move_completed_path: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
+                    download_location: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
+                    pre_allocate_storage: true,
+                    prioritize_first_last_pieces: true,
+                    sequential_download: true,
                 },
             }]],
             id: 3
@@ -59,6 +63,7 @@ async function sendToDeluge(torrentUrl, type) {
         const sessionId = await authenticateDeluge()
         const torrentPath = await downloadTorrent(sessionId, torrentUrl)
         const addedTorrents = await addTorrent(sessionId, torrentPath, type)
+        // TODO: call jellyfin to rescan the fitting library
         return NextResponse.json({ hash: addedTorrents.result[0][1] })
     } catch (error) {
         return NextResponse.json({ message: `Error Deluge: ${error.message}` })
