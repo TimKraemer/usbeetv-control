@@ -1,22 +1,13 @@
+import { authenticateDeluge } from '@/app/lib/authenticateDeluge'
 import { NextResponse } from 'next/server'
-
-async function authenticateDeluge() {
-    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ method: 'auth.login', params: [process.env.DELUGE_PASSWORD], id: 1 })
-    })
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-    return response.headers.get("set-cookie")
-}
 
 async function getTorrentProgress(sessionId, torrentId) {
     const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
         body: JSON.stringify({
-            method: 'web.get_torrents_status',
-            params: [{}, ['progress']],
+            method: 'web.get_torrent_status',
+            params: [torrentId, ['progress']],
             id: 4
         })
     })
@@ -24,10 +15,7 @@ async function getTorrentProgress(sessionId, torrentId) {
     const result = await response.json()
     if (result.error) throw new Error(`Error fetching torrent status: ${result.error}`)
 
-    const torrent = result.result[torrentId]
-    if (!torrent) throw new Error('Torrent not found')
-
-    return torrent.progress
+    return result.result.progress
 }
 
 export async function GET(request) {

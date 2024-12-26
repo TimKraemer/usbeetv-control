@@ -18,7 +18,8 @@
     "next": "15.1.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-flagkit": "^2.0.4"
+    "react-flagkit": "^2.0.4",
+    "react-use": "^17.6.0"
   },
   "devDependencies": {
     "biome": "^0.3.3",

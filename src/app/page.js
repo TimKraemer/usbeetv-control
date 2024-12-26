@@ -6,6 +6,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { useCallback, useEffect, useState } from 'react'
 import Flag from 'react-flagkit'
+import { useInterval } from 'react-use'
 
 const darkTheme = createTheme({
   palette: {
@@ -50,6 +51,7 @@ const ResultCard = ({ result, type }) => {
   const [open, setOpen] = useState(false)
   const [downloadProgress, setDownloadProgress] = useState(null)
   const futureRelease = useFutureRelease(result, type)
+  const [torrentId, setTorrentId] = useState(null)
 
   const handleCardClick = async () => {
     try {
@@ -60,7 +62,7 @@ const ResultCard = ({ result, type }) => {
       } else {
         console.log(data)
         if (data.hash) {
-          startTrackingProgress(data.hash)
+          setTorrentId(data.hash)
         }
       }
     } catch (error) {
@@ -72,30 +74,30 @@ const ResultCard = ({ result, type }) => {
     try {
       const response = await fetch(`/api/progress?torrentId=${torrentId}`)
       const data = await response.json()
-      setDownloadProgress(data.progress)
+      setDownloadProgress(Math.round(data.progress))
     } catch (error) {
       console.error('Error fetching download progress:', error)
     }
   }
 
-  const startTrackingProgress = (torrentId) => {
-    useInterval(() => {
+  useInterval(() => {
+    if (torrentId) {
       fetchDownloadProgress(torrentId)
-    }, 5000)
-  }
+    }
+  }, 5000)
 
   return (
     <>
       <DownloadDialog open={open} onClose={() => setOpen(false)} futureRelease={futureRelease} result={result} type={type} />
       <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square">
-        <CardActionArea onClick={handleCardClick}>
+        <CardActionArea onClick={handleCardClick} className="h-full">
           <CardMedia
             component="img"
-            className="h-[30vh] !object-contain object-top"
+            className="h-auto max-h-[25vh] !object-contain object-top"
             image={`https://image.tmdb.org/t/p/w500${result.poster_path}`}
             alt={`${type === 'movie' ? result.title : result.name} Poster`}
           />
-          <CardContent className="flex flex-row gap-2">
+          <CardContent className="flex flex-row gap-2 min-h-full">
             <Typography variant="body2" color="textSecondary">
               {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear() || '????'}
             </Typography>
