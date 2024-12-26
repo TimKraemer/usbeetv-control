@@ -1,7 +1,7 @@
 'use client'
 
 import SearchIcon from '@mui/icons-material/Search'
-import { Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
+import { Alert, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { useCallback, useEffect, useState } from 'react'
@@ -13,28 +13,78 @@ const darkTheme = createTheme({
   },
 })
 
-const ResultCard = ({ result, type }) => (
-  <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square">
-    <CardActionArea>
-      <CardMedia
-        component="img"
-        className="h-[30vh] !object-contain object-top"
-        image={`https://image.tmdb.org/t/p/w500${result.poster_path}`}
-        alt={`${type === 'movie' ? result.title : result.name} Poster`}
-      />
-      <CardContent className="flex flex-row gap-2">
-        <Typography variant="body2" color="textSecondary">
-          {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear() || '????'}
-        </Typography>
-        <Typography variant="h8">
-          {type === 'movie'
-            ? (result.title === result.original_title ? result.title : `${result.title} / ${result.original_title}`)
-            : (result.name === result.original_name ? result.name : `${result.name} / ${result.original_name}`)}
-        </Typography>
-      </CardContent>
-    </CardActionArea>
-  </Card >
-)
+const ResultCard = ({ result, type }) => {
+  const [open, setOpen] = useState(false)
+  const [futureRelease, setFutureRelease] = useState(false)
+
+  useEffect(() => {
+    const releaseDate = new Date(type === 'movie' ? result.release_date : result.first_air_date)
+    const currentDate = new Date()
+    if (releaseDate > currentDate) {
+      setFutureRelease(true)
+    }
+  }, [result, type])
+
+  const handleClose = () => {
+    setOpen(false)
+  }
+
+  const handleCardClick = async () => {
+    try {
+      const response = await fetch(`/api/download?tmdbId=${result.id}`)
+      const data = await response.json()
+      if (data.error) {
+        setOpen(true)
+      } else {
+        console.log(data)
+      }
+    } catch (error) {
+      console.error('Error fetching download data:', error)
+    }
+  }
+
+  return (
+    <>
+      <Dialog open={open} onClose={handleClose}>
+        <DialogContent>
+          {futureRelease ? (
+            <Alert severity="info">
+              Das kommt erst im {new Date(type === 'movie' ? result.release_date : result.first_air_date).toLocaleString('de-DE', { month: 'long' })} {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear()} raus. Versuch es dann nochmal!
+            </Alert>
+          ) : (
+            <Alert severity="warning">
+              Es wurde leider kein geeigneter Download gefunden. Versuch's in ein paar Tagen nochmal oder frag' Tim, ob er es finden kann.
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleClose} color="primary">OK</Button>
+        </DialogActions>
+      </Dialog>
+      <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square">
+        <CardActionArea onClick={handleCardClick}>
+          <CardMedia
+            component="img"
+            className="h-[30vh] !object-contain object-top"
+            image={`https://image.tmdb.org/t/p/w500${result.poster_path}`}
+            alt={`${type === 'movie' ? result.title : result.name} Poster`}
+          />
+          <CardContent className="flex flex-row gap-2">
+            <Typography variant="body2" color="textSecondary">
+              {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear() || '????'}
+            </Typography>
+            <Typography variant="h8">
+              {type === 'movie'
+                ? (result.title === result.original_title ? result.title : `${result.title} / ${result.original_title}`)
+                : (result.name === result.original_name ? result.name : `${result.name} / ${result.original_name}`)}
+            </Typography>
+          </CardContent>
+        </CardActionArea>
+      </Card>
+    </>
+
+  )
+}
 
 const ResultsSection = ({ title, results, type }) => (
   <div className="flex-1 overflow-hidden">
