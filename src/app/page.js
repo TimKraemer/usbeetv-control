@@ -1,7 +1,7 @@
 'use client'
 
 import SearchIcon from '@mui/icons-material/Search'
-import { Alert, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
+import { Alert, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, IconButton, InputAdornment, Menu, MenuItem, TextField, Typography } from '@mui/material'
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import { useCallback, useEffect, useState } from 'react'
@@ -13,8 +13,7 @@ const darkTheme = createTheme({
   },
 })
 
-const ResultCard = ({ result, type }) => {
-  const [open, setOpen] = useState(false)
+const useFutureRelease = (result, type) => {
   const [futureRelease, setFutureRelease] = useState(false)
 
   useEffect(() => {
@@ -25,55 +24,50 @@ const ResultCard = ({ result, type }) => {
     }
   }, [result, type])
 
-  const handleClose = () => {
-    setOpen(false)
-  }
+  return futureRelease
+}
+
+const DownloadDialog = ({ open, onClose, futureRelease, result, type }) => (
+  <Dialog open={open} onClose={onClose}>
+    <DialogContent>
+      {futureRelease ? (
+        <Alert severity="info">
+          Das kommt erst im {new Date(type === 'movie' ? result.release_date : result.first_air_date).toLocaleString('de-DE', { month: 'long' })} {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear()} raus. Versuch es dann nochmal!
+        </Alert>
+      ) : (
+        <Alert severity="warning">
+          Es wurde leider kein geeigneter Download gefunden. Versuch's in ein paar Tagen nochmal oder frag' Tim, ob er es finden kann.
+        </Alert>
+      )}
+    </DialogContent>
+    <DialogActions>
+      <Button onClick={onClose} color="primary">OK</Button>
+    </DialogActions>
+  </Dialog>
+)
+
+const ResultCard = ({ result, type }) => {
+  const [open, setOpen] = useState(false)
+  const futureRelease = useFutureRelease(result, type)
 
   const handleCardClick = async () => {
     try {
-      const response = await fetch(`/api/download?tmdbId=${result.id}`)
-      if (response.headers.get('Content-Type') === 'application/x-bittorrent') {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.style.display = 'none'
-        a.href = url
-        const contentDisposition = response.headers.get('Content-Disposition')
-        const fileNameMatch = contentDisposition?.match(/filename="(.+)"/)
-        const fileName = fileNameMatch ? fileNameMatch[1] : `${result.name}.torrent`
-        a.download = fileName
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
+      const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}`)
+
+      const data = await response.json()
+      if (data.error) {
+        setOpen(true)
       } else {
-        const data = await response.json()
-        if (data.error) {
-          setOpen(true)
-        }
+        console.log(data)
       }
     } catch (error) {
-      console.error('Error fetching download data:', error)
+      console.error('Error fetching download:', error)
     }
   }
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose}>
-        <DialogContent>
-          {futureRelease ? (
-            <Alert severity="info">
-              Das kommt erst im {new Date(type === 'movie' ? result.release_date : result.first_air_date).toLocaleString('de-DE', { month: 'long' })} {new Date(type === 'movie' ? result.release_date : result.first_air_date).getFullYear()} raus. Versuch es dann nochmal!
-            </Alert>
-          ) : (
-            <Alert severity="warning">
-              Es wurde leider kein geeigneter Download gefunden. Versuch's in ein paar Tagen nochmal oder frag' Tim, ob er es finden kann.
-            </Alert>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleClose} color="primary">OK</Button>
-        </DialogActions>
-      </Dialog>
+      <DownloadDialog open={open} onClose={() => setOpen(false)} futureRelease={futureRelease} result={result} type={type} />
       <Card key={result.id} className="rounded-lg min-w-[200px] aspect-square">
         <CardActionArea onClick={handleCardClick}>
           <CardMedia
@@ -95,7 +89,6 @@ const ResultCard = ({ result, type }) => {
         </CardActionArea>
       </Card>
     </>
-
   )
 }
 
@@ -103,7 +96,7 @@ const ResultsSection = ({ title, results, type }) => (
   <div className="flex-1 overflow-hidden">
     <Typography variant="h5" className="mb-4">{title}</Typography>
     <div className="flex overflow-x-auto gap-4 h-full">
-      {results.map((result) => (
+      {results?.results?.map((result) => (
         <ResultCard key={result.id} result={result} type={type} />
       ))}
     </div>
@@ -204,7 +197,7 @@ export default function Home() {
           {error && <p className="text-red-500">{error}</p>}
           {loading ? (
             <CircularProgress />
-          ) : searchString === '' ? (
+          ) : searchString.length < 3 ? (
             <div className="flex flex-col gap-4 w-full h-full">
               <p className="text-gray-500">Um dem USBee TV einen Film oder eine Serie hinzuzufügen, suche ihn zunächst mit der Suchbox und tippe dann auf den gewünschten Titel.</p>
             </div>

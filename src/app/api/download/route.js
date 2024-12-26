@@ -1,81 +1,99 @@
-import axios from 'axios'
 import { NextResponse } from 'next/server'
 
+const tagScores = {
+    'DL': 1, 'ML': 1,
+    'HEVC': 1,
+    'HDR10': 1, 'HDR10+': 1,
+    'DTS': 1, 'DTSHD': 1, 'DTSHR': 1,
+    'Dolby Vision': 1
+}
+
 function rankRow(row) {
-    const tags = row.tags
     let score = 0
-
-    const tagScores = {
-        'DL': 1, 'ML': 1,
-        'HEVC': 1,
-        'HDR10': 1, 'HDR10+': 1,
-        'DTS': 1, 'DTSHD': 1, 'DTSHR': 1,
-        'Dolby Vision': 1
+    for (const tag of row.tags) {
+        score += tagScores[tag] || 0
     }
-
-    for (const tag of tags) {
-        if (tagScores[tag]) {
-            score += tagScores[tag]
-        }
-    }
-
     if (row.name.includes('BluRay') || row.name.includes('BDRiP')) {
         score += 1
     }
-
     return score
+}
+
+async function authenticateDeluge() {
+    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: 'auth.login', params: [process.env.DELUGE_PASSWORD], id: 1 })
+    })
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+    return response.headers.get("set-cookie")
+}
+
+async function downloadTorrent(sessionId, torrentUrl) {
+    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
+        body: JSON.stringify({ method: 'web.download_torrent_from_url', params: [torrentUrl], id: 2 })
+    })
+    if (!response.ok) throw new Error(`Torrent download failed: HTTP ${response.status}`)
+    const result = await response.json()
+    if (!result.result || result.error) throw new Error(`Error downloading torrent: ${result.error || 'Unknown error'}`)
+    return result.result
+}
+
+async function addTorrent(sessionId, torrentPath, type) {
+    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
+        body: JSON.stringify({
+            method: 'web.add_torrents',
+            params: [[{
+                path: torrentPath,
+                options: {
+                    move_completed: true,
+                    move_completed_path: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
+                },
+            }]],
+            id: 3
+        })
+    })
+    if (!response.ok) throw new Error(`Failed to add torrent: HTTP ${response.status} - ${await response.text()}`)
+    const result = await response.json()
+    if (result.error) throw new Error(`Error adding torrent: ${result.error}`)
+}
+
+async function sendToDeluge(torrentUrl, type) {
+    try {
+        const sessionId = await authenticateDeluge()
+        const torrentPath = await downloadTorrent(sessionId, torrentUrl)
+        await addTorrent(sessionId, torrentPath, type)
+        return NextResponse.json({ message: 'Torrent added successfully' })
+    } catch (error) {
+        return NextResponse.json({ message: `Error Deluge: ${error.message}` })
+    }
 }
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const tmdbId = searchParams.get('tmdbId')
+    const type = searchParams.get('type')
 
     if (!tmdbId) {
         return NextResponse.json({ error: 'TMDB ID is required' }, { status: 400 })
     }
 
     try {
-        const response = await axios.get(`${process.env.TS_API_URL}/browse.php`, {
-            params: {
-                tmdbId,
-                apikey: process.env.TS_API_KEY,
-                cats: "9,53"
-            },
-        })
+        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=9,53`)
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
-        if (response.data.count === 0) {
-            return NextResponse.json({ error: 'No results found' }, { status: 404 })
-        }
+        const data = await response.json()
+        if (data.count === 0) return NextResponse.json({ error: 'No results found' }, { status: 404 })
 
-        const filteredRows = response.data.rows.filter(row => row.trumped === 0 && row.seeders !== 0 && row.numfiles < 5)
-
-
-        filteredRows.sort((a, b) => {
-            const scoreDifference = rankRow(b) - rankRow(a)
-            if (scoreDifference !== 0) {
-                return scoreDifference
-            }
-            return a.added - b.added
-        })
+        const filteredRows = data.rows.filter(row => row.trumped === 0 && row.seeders !== 0 && row.numfiles < 5)
+        filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
 
         const bestRow = filteredRows[0]
-        // return NextResponse.json(bestRow.id)
-
-        const downloadResponse = await axios.get("https://torrent-syndikat.org/download.php", {
-            params: {
-                id: bestRow.id,
-                apikey: process.env.TS_API_KEY,
-            },
-            responseType: 'arraybuffer'
-        })
-
-        const fileName = `${bestRow.name}.torrent`
-        return new NextResponse(downloadResponse.data, {
-            headers: {
-                'Content-Type': 'application/x-bittorrent',
-                'Content-Disposition': `attachment; filename="${fileName}"`,
-            },
-        })
+        return await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
     } catch (error) {
         return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
     }
