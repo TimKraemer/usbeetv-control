@@ -54,7 +54,7 @@ async function addTorrent(sessionId, torrentPath, type) {
     })
     if (!response.ok) throw new Error(`Failed to add torrent: HTTP ${response.status} - ${await response.text()}`)
     const result = await response.json()
-    if (result.error) throw new Error(`Error adding torrent: ${result.error}`)
+    if (result.error) throw new Error(`Error adding torrent: ${JSON.stringify(result.error)}`)
     return result
 }
 
