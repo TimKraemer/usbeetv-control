@@ -2,7 +2,7 @@
 const nextConfig = {
   output: "standalone",
   env: {
-    NEXT_TELEMETRY_DISABLED: 1,
+    NEXT_TELEMETRY_DISABLED: "true",
   },
 }
 

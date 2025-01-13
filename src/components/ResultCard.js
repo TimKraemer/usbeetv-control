@@ -65,7 +65,6 @@ export const ResultCard = ({ result, type }) => {
                 `/api/download?tmdbId=${result.id}&type=${type}`
             )
             const data = await response.json()
-            console.log(data)
             if (data.error) {
                 setOpen(true)
                 setDownloadStarted(false) // Reset if there's an error

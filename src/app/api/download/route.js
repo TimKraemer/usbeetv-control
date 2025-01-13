@@ -1,4 +1,4 @@
-import { authenticateDeluge } from '@/app/lib/authenticateDeluge'
+import { sendToDeluge } from '@/app/lib/sendToDeluge'
 import { NextResponse } from 'next/server'
 
 const tagScores = {
@@ -18,55 +18,6 @@ function rankRow(row) {
         score += 1
     }
     return score
-}
-
-async function downloadTorrent(sessionId, torrentUrl) {
-    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
-        body: JSON.stringify({ method: 'web.download_torrent_from_url', params: [torrentUrl], id: 2 })
-    })
-    if (!response.ok) throw new Error(`Torrent download failed: HTTP ${response.status}`)
-    const result = await response.json()
-    if (!result.result || result.error) throw new Error(`Error downloading torrent: ${result.error || 'Unknown error'}`)
-    return result.result
-}
-
-async function addTorrent(sessionId, torrentPath, type) {
-    const response = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
-        body: JSON.stringify({
-            method: 'web.add_torrents',
-            params: [[{
-                path: torrentPath,
-                options: {
-                    move_completed: false,
-                    // move_completed_path: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
-                    download_location: type === 'movie' ? process.env.MOVIE_DOWNLOAD_PATH : process.env.TV_DOWNLOAD_PATH,
-                    pre_allocate_storage: true,
-                    prioritize_first_last_pieces: true,
-                    sequential_download: true,
-                },
-            }]],
-            id: 3
-        })
-    })
-    if (!response.ok) throw new Error(`Failed to add torrent: HTTP ${response.status} - ${await response.text()}`)
-    const result = await response.json()
-    if (result.error) throw new Error(`Error adding torrent: ${JSON.stringify(result.error)}`)
-    return result
-}
-
-async function sendToDeluge(torrentUrl, type) {
-    try {
-        const sessionId = await authenticateDeluge()
-        const torrentPath = await downloadTorrent(sessionId, torrentUrl)
-        const addedTorrents = await addTorrent(sessionId, torrentPath, type)
-        return NextResponse.json({ hash: addedTorrents.result[0][1] })
-    } catch (error) {
-        return NextResponse.json({ message: `Error Deluge: ${error.message}` })
-    }
 }
 
 export async function GET(request) {
