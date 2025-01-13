@@ -139,12 +139,12 @@ export const ResultCard = ({ result, type }) => {
                             </Typography>
                         </div>
                     </CardContent>
-                    {existsInDb && (
+                    {(existsInDb || downloadProgress.progress === 100) && (
                         <CheckCircleIcon
                             sx={{ position: "absolute", top: 8, right: 8, color: "green", backgroundColor: "white", borderRadius: "50%" }} />
                     )}
                 </CardActionArea>
-                {downloadStarted && (
+                {downloadStarted && downloadProgress.progress < 100 && (
                     <Box
                         className="absolute inset-0 flex justify-center items-center bg-black bg-opacity-80 flex-col pb-20"
                     >
