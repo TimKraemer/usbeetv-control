@@ -9,6 +9,8 @@ const tagScores = {
     'Dolby Vision': 1
 }
 
+const blacklist = ['.TS.', 'telesync', ".CAM"]
+
 function rankRow(row) {
     let score = 0
     for (const tag of row.tags) {
@@ -20,6 +22,7 @@ function rankRow(row) {
     return score
 }
 
+
 export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const tmdbId = searchParams.get('tmdbId')
@@ -30,16 +33,20 @@ export async function GET(request) {
     }
 
     try {
-        const category = type === 'movie' ? '9' : '55'
-        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${category}`)
+        const categories = type === 'movie' ? '9,37' : '55,57'
+        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         const data = await response.json()
         if (data.count === 0) return NextResponse.json({ error: 'No results found' }, { status: 404 })
 
-        const filteredRows = data.rows.filter(row => row.trumped === 0 && row.seeders !== 0 && (type !== 'movie' || row.numfiles < 5))
+        const filteredRows = data.rows.filter(row =>
+            row.trumped === 0 &&
+            row.seeders !== 0 &&
+            (type !== 'movie' || row.numfiles < 5) &&
+            !blacklist.some(term => row.name.toLowerCase().includes(term.toLowerCase()))
+        )
         filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
-
         if (type === 'tv') {
             const seasonMap = new Map()
 

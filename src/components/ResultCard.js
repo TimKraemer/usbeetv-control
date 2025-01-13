@@ -141,7 +141,7 @@ export const ResultCard = ({ result, type }) => {
                     </CardContent>
                     {existsInDb && (
                         <CheckCircleIcon
-                            sx={{ position: "absolute", top: 8, right: 8, color: "green" }} />
+                            sx={{ position: "absolute", top: 8, right: 8, color: "green", backgroundColor: "white", borderRadius: "50%" }} />
                     )}
                 </CardActionArea>
                 {downloadStarted && (

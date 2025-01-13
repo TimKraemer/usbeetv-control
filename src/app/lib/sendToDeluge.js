@@ -1,8 +1,8 @@
 import { addTorrent } from "@/app/lib/addTorrent"
 import { authenticateDeluge } from "@/app/lib/authenticateDeluge"
 import { connectToWebUI } from "@/app/lib/connectToWebUI"
+import { downloadTorrent } from "@/app/lib/downloadTorrent"
 import { NextResponse } from "next/server"
-import { downloadTorrent } from "../../lib/downloadTorrent"
 
 export async function sendToDeluge(torrentUrl, type) {
     try {
