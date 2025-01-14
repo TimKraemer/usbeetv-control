@@ -10,7 +10,11 @@ export const DownloadDialog = ({ open, onClose, futureRelease, result, type }) =
         if (!futureRelease && open) {
             const fetchProviders = async () => {
                 try {
-                    const response = await fetch(`/api/providers?movie_id=${result.id}`)
+                    const response = await fetch(`/api/providers?id=${result.id}&type=${type}`)
+                    if (response.status === 404) {
+                        setProviders('not_found')
+                        return
+                    }
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`)
                     }
@@ -23,7 +27,7 @@ export const DownloadDialog = ({ open, onClose, futureRelease, result, type }) =
 
             fetchProviders()
         }
-    }, [futureRelease, open, result.id])
+    }, [futureRelease, open, result.id, type])
 
     return (
         <Dialog open={open} onClose={onClose}>
@@ -34,10 +38,11 @@ export const DownloadDialog = ({ open, onClose, futureRelease, result, type }) =
                     </Alert>
                 ) : (
                     <>
+
                         <Alert severity="warning">
                             Es wurde leider kein geeigneter Download gefunden. Versuch's in ein paar Tagen nochmal oder frag' Tim, ob er es finden kann.
                         </Alert>
-                        {providers && <Providers providers={providers} />}
+                        {providers && providers !== 'not_found' && <Providers providers={providers} />}
                     </>
                 )}
             </DialogContent>

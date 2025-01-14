@@ -2,14 +2,23 @@ import { NextResponse } from 'next/server'
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url)
-    const movieId = searchParams.get('movie_id')
+    const id = searchParams.get('id')
+    const type = searchParams.get('type') || 'movie' // default to 'movie' if not specified
 
-    if (!movieId) {
-        return NextResponse.json({ error: 'Movie ID is required' }, { status: 400 })
+    if (!id) {
+        return NextResponse.json({ error: 'ID is required' }, { status: 400 })
     }
 
+    const endpoint = type === 'tv'
+        ? `https://api.themoviedb.org/3/tv/${id}/watch/providers`
+        : `https://api.themoviedb.org/3/movie/${id}/watch/providers`
+
     try {
-        const response = await fetch(`https://api.themoviedb.org/3/movie/${movieId}/watch/providers?api_key=${process.env.TMDB_API_KEY}`)
+        const response = await fetch(`${endpoint}?api_key=${process.env.TMDB_API_KEY}`)
+
+        if (response.status === 404) {
+            return NextResponse.json({ error: `${type.charAt(0).toUpperCase() + type.slice(1)} not found` }, { status: 404 })
+        }
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`)
@@ -19,7 +28,7 @@ export async function GET(request) {
         const providers = data.results?.DE
 
         if (!providers) {
-            return NextResponse.json({ error: 'No providers found for this movie in Germany' }, { status: 404 })
+            return NextResponse.json({ error: `No providers found for this ${type} in Germany` }, { status: 404 })
         }
 
         return NextResponse.json({ providers })
