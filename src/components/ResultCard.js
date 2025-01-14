@@ -1,101 +1,62 @@
 'use client'
+import { useDownloadProgress } from '@/app/lib/useDownloadProgress'
+import { useMovieExistsInDb, useTvShowExistsInDb } from '@/app/lib/useExistsInDb'
+import { useFutureRelease } from '@/app/lib/useFutureRelease'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
-import { Box, Card, CardActionArea, CardContent, CardMedia, Typography } from "@mui/material"
+import RuleIcon from '@mui/icons-material/Rule'
+import { Box, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Tooltip, Typography } from "@mui/material"
 import { useEffect, useState } from "react"
-import { useInterval } from "react-use"
 import { CircularProgressWithLabel } from "./CircularProgressWithLabel"
 import { DownloadDialog } from './DownloadDialog'
 
-const useFutureRelease = (result, type) => {
-    const [futureRelease, setFutureRelease] = useState(false)
-
-    useEffect(() => {
-        const releaseDate = new Date(type === 'movie' ? result.release_date : result.first_air_date)
-        const currentDate = new Date()
-        if (releaseDate > currentDate) {
-            setFutureRelease(true)
-        }
-    }, [result, type])
-
-    return futureRelease
-}
-
-const fetchSeriesStatus = async (tmdbId) => {
-    try {
-        const response = await fetch(`/api/library/tvshows?tmdbId=${tmdbId}`)
-        const data = await response.json()
-        return data
-    } catch (error) {
-        console.error('Error fetching series status:', error)
-        return { status: 'error' }
-    }
-}
-
 export const ResultCard = ({ result, type }) => {
     const [open, setOpen] = useState(false)
-    const [downloadProgress, setDownloadProgress] = useState({ progress: 0, eta: 0 })
-    const futureRelease = useFutureRelease(result, type)
     const [torrentId, setTorrentId] = useState(null)
-    const [existsInDb, setExistsInDb] = useState(false)
-    const [seriesStatus, setSeriesStatus] = useState(null)
     const [downloadStarted, setDownloadStarted] = useState(false)
+    const [loading, setLoading] = useState(true)
+
+    const futureRelease = useFutureRelease(result, type)
+    let existsInDb
+    if (type === 'movie') {
+        existsInDb = useMovieExistsInDb(result)
+    } else if (type === 'tv') {
+        existsInDb = useTvShowExistsInDb(result)
+    }
 
     useEffect(() => {
-        const checkIfExists = async () => {
-            try {
-                const response = await fetch(`/api/library/movies?tmdbId=${result.id}`)
-                const data = await response.json()
-                setExistsInDb(data.exists)
-            } catch (error) {
-                console.error("Error checking if movie exists in DB:", error)
-            }
+        if (existsInDb !== undefined) {
+            setLoading(false)
         }
+    }, [existsInDb])
 
-        checkIfExists()
-    }, [result])
+    const downloadProgress = useDownloadProgress(torrentId)
 
     const handleCardClick = async () => {
-        if (existsInDb || downloadStarted) return // Prevent action if movie exists in DB or download has started
+        if (loading || existsInDb?.exists || downloadStarted) return
 
-        setDownloadStarted(true) // Set download started to true
-
+        setDownloadStarted(true)
 
         try {
-            const response = await fetch(
-                `/api/download?tmdbId=${result.id}&type=${type}`
-            )
+            const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}`)
             const data = await response.json()
             if (data.error) {
                 setOpen(true)
-                setDownloadStarted(false) // Reset if there's an error
-                setDownloadProgress({ progress: 0, eta: 0 }) // Reset progress
-            } else {
-                if (data.hash) {
-                    setTorrentId(data.hash)
-                }
+                setDownloadStarted(false)
+            } else if (data.hash) {
+                setTorrentId(data.hash)
             }
         } catch (error) {
             console.error("Error fetching download:", error)
-            setDownloadStarted(false) // Reset if there's an error
-            setDownloadProgress({ progress: 0, eta: 0 }) // Reset progress
+            setDownloadStarted(false)
         }
     }
 
-    const fetchDownloadProgress = async (torrentId) => {
-        try {
-            const response = await fetch(`/api/progress?torrentId=${torrentId}`)
-            const data = await response.json()
-            setDownloadProgress({ progress: Math.round(data.progress), eta: data.eta })
-        } catch (error) {
-            console.error("Error fetching download progress:", error)
-        }
+    const formatEta = (eta) => {
+        const seconds = eta % 60
+        const minutes = Math.floor(eta / 60) % 60
+        const hours = Math.floor(eta / 3600)
+        return `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${seconds ? `${seconds}s` : ''}`.trim()
     }
-
-    useInterval(() => {
-        if (torrentId) {
-            fetchDownloadProgress(torrentId)
-        }
-    }, 5000)
 
     return (
         <>
@@ -107,12 +68,12 @@ export const ResultCard = ({ result, type }) => {
                 type={type} />
             <Card
                 key={result.id}
-                className={`rounded-lg min-w-[200px] aspect-square relative ${downloadProgress !== null ? 'bg-black bg-opacity-80' : ''}`}
+                className={`rounded-lg min-w-[200px] aspect-square relative ${downloadProgress.progress ? 'bg-black bg-opacity-80' : ''}`}
             >
                 <CardActionArea
                     onClick={handleCardClick}
                     className="h-full"
-                    disabled={existsInDb || downloadStarted}
+                    disabled={loading || existsInDb?.exists || downloadStarted}
                 >
                     <CardMedia
                         component="img"
@@ -122,11 +83,7 @@ export const ResultCard = ({ result, type }) => {
                     <CardContent className="flex flex-col gap-2 min-h-full">
                         <div className="flex flex-row gap-2">
                             <Typography variant="body2" color="textSecondary">
-                                {new Date(
-                                    type === "movie"
-                                        ? result.release_date
-                                        : result.first_air_date
-                                ).getFullYear() || "????"}
+                                {new Date(type === "movie" ? result.release_date : result.first_air_date).getFullYear() || "????"}
                             </Typography>
                             <Typography variant="h8">
                                 {type === "movie"
@@ -139,10 +96,17 @@ export const ResultCard = ({ result, type }) => {
                             </Typography>
                         </div>
                     </CardContent>
-                    {(existsInDb || downloadProgress.progress === 100) && (
+                    {loading ? (
+                        <CircularProgress size={24} sx={{ position: "absolute", top: 8, right: 8 }} />
+                    ) : (existsInDb?.exists || downloadProgress.progress === 100) && (existsInDb?.isComplete ? (
                         <CheckCircleIcon
                             sx={{ position: "absolute", top: 8, right: 8, color: "green", backgroundColor: "white", borderRadius: "50%" }} />
-                    )}
+                    ) : (
+                        <Tooltip open arrow placement="left" title="Unvollständig">
+                            <CheckCircleIcon
+                                sx={{ position: "absolute", top: 8, right: 8, color: "orange", backgroundColor: "white", borderRadius: "50%" }} />
+                        </Tooltip>
+                    ))}
                 </CardActionArea>
                 {downloadStarted && downloadProgress.progress < 100 && (
                     <Box
@@ -150,12 +114,7 @@ export const ResultCard = ({ result, type }) => {
                     >
                         <CircularProgressWithLabel value={downloadProgress.progress} />
                         <Typography variant="caption" color="textSecondary">
-                            {(() => {
-                                const seconds = downloadProgress.eta % 60
-                                const minutes = Math.floor(downloadProgress.eta / 60) % 60
-                                const hours = Math.floor(downloadProgress.eta / 3600)
-                                return `${hours ? `${hours}h ` : ''}${minutes ? `${minutes}m ` : ''}${seconds ? `${seconds}s` : ''}`.trim()
-                            })()}
+                            {formatEta(downloadProgress.eta)}
                         </Typography>
                     </Box>
                 )}

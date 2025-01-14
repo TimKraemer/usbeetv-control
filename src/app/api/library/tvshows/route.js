@@ -15,20 +15,6 @@ async function fetchFromJellyfin(endpoint, queryParams = '') {
     return response.json()
 }
 
-async function fetchFromTMDB(tmdbId) {
-    const url = `http://api.themoviedb.org/3/tv/${tmdbId}/seasons?api_key=${process.env.TMDB_API_KEY}`
-    const response = await fetch(url, {
-        headers: {
-            'Content-Type': 'application/json',
-        },
-    })
-
-    if (!response.ok) {
-        throw new Error(`Failed to fetch data from TMDB: ${response.statusText}`)
-    }
-
-    return response.json()
-}
 
 async function getMatchedSeries(series, tmdbId) {
     for (const item of series) {
@@ -53,6 +39,21 @@ async function getSeasonStatus(seasons) {
     return seasonStatus
 }
 
+async function fetchTVShowDetailsFromTMDB(tmdbId) {
+    const url = `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`
+    const response = await fetch(url, {
+        headers: {
+            'Content-Type': 'application/json',
+        },
+    })
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch TV show details from TMDB: ${response.statusText}`)
+    }
+
+    return response.json()
+}
+
 export async function GET(req) {
     const { searchParams } = new URL(req.url)
     const tmdbId = searchParams.get('tmdbId')
@@ -67,25 +68,60 @@ export async function GET(req) {
         const matchedSeries = await getMatchedSeries(series, tmdbId)
 
         if (!matchedSeries) {
-            return NextResponse.json({ status: 'not existing', seasons: [] })
+            return NextResponse.json({ exists: false })
+        }
+
+        const exists = true
+
+        const tvShowDetails = await fetchTVShowDetailsFromTMDB(tmdbId)
+        const isEnded = tvShowDetails.status === 'Ended'
+        const totalSeasons = tvShowDetails.number_of_seasons
+        const allSeasons = tvShowDetails.seasons || []
+        const currentSeason = isEnded ? null : allSeasons.find(season => season.season_number === tvShowDetails.next_episode_to_air?.season_number) || null
+
+
+        const lastAiredSeasonNumber = tvShowDetails.last_episode_to_air?.season_number
+
+        const completelyAiredSeasons = []
+
+        for (let i = 1; i < lastAiredSeasonNumber; i++) {
+            completelyAiredSeasons.push(i)
+        }
+
+        if (isEnded || currentSeason === null || tvShowDetails.last_episode_to_air?.episode_number === currentSeason?.episode_count) {
+            completelyAiredSeasons.push(lastAiredSeasonNumber)
+        }
+
+        const incompleteSeason = tvShowDetails.next_episode_to_air?.season_number || null
+
+        const airedEpisodesOfIncompleteSeason = []
+        if (incompleteSeason) {
+            for (let i = 1; i < tvShowDetails.next_episode_to_air.episode_number; i++) {
+                airedEpisodesOfIncompleteSeason.push(i)
+            }
         }
 
         const seasonsData = await fetchFromJellyfin('/Items', `?ParentId=${matchedSeries.Id}&IncludeItemTypes=Season`)
-        const seasons = seasonsData.Items || []
 
-        const allSeasonsData = await fetchFromTMDB(tmdbId)
-        const allSeasons = allSeasonsData.Items || []
+        const dbSeasons = seasonsData.Items || []
 
-        if (allSeasons.length !== seasons.length) {
-            const missingSeasons = allSeasons.filter(season => !seasons.some(s => s.Id === season.Id))
-            return NextResponse.json({ status: 'not all seasons available', missingSeasons: missingSeasons.map(season => season.IndexNumber) })
-        }
+        const seasonStatus = await getSeasonStatus(dbSeasons)
 
-        const seasonStatus = await getSeasonStatus(seasons)
 
-        return NextResponse.json({ status: 'exists', seasons: seasonStatus, allSeasons })
+        const missingSeasons = allSeasons.filter(season => season.season_number > 0 && season.episode_count > 0 && !seasonStatus.some(s => s.season === season.season_number)) || []
+
+
+
+        return NextResponse.json({
+            isEnded,
+            totalSeasons,
+            completelyAiredSeasons,
+            airedEpisodesOfIncompleteSeason,
+            missingSeasons,
+            exists
+        })
     } catch (error) {
         console.error('Error checking TV series:', error)
-        return NextResponse.json({ error: 'Failed to check TV series' }, { status: 500 })
+        return NextResponse.json({ error: `Failed to check TV series: ${error}` }, { status: 500 })
     }
 }
