@@ -6,7 +6,8 @@ const tagScores = {
     'HEVC': 1,
     'HDR10': 1, 'HDR10+': 1,
     'DTS': 1, 'DTSHD': 1, 'DTSHR': 1,
-    'Dolby Vision': 1
+    'Dolby Vision': 1,
+
 }
 
 const blacklist = ['.TS.', 'telesync', ".CAM"]
@@ -34,16 +35,21 @@ export async function GET(request) {
 
     try {
         const categories = type === 'movie' ? '9,37' : '55,57'
-        const response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
+        let response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
-        const data = await response.json()
-        if (data.count === 0) return NextResponse.json({ error: 'No results found' }, { status: 404 })
+        let data = await response.json()
+        if (data.count === 0) {
+            // Retry without release_type filter
+            response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+            data = await response.json()
+            if (data.count === 0) return NextResponse.json({ error: 'No results found' }, { status: 404 })
+        }
 
         const filteredRows = data.rows.filter(row =>
             row.trumped === 0 &&
             row.seeders !== 0 &&
-            (type !== 'movie' || row.numfiles < 5) &&
             !blacklist.some(term => row.name.toLowerCase().includes(term.toLowerCase()))
         )
         filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
