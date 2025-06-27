@@ -1,7 +1,10 @@
 'use client'
 
+import ClearIcon from '@mui/icons-material/Clear'
+import LanguageIcon from '@mui/icons-material/Language'
 import SearchIcon from '@mui/icons-material/Search'
 import { Button, IconButton, InputAdornment, Menu, MenuItem, TextField } from '@mui/material'
+import { AnimatePresence, motion } from 'framer-motion'
 import { useState } from 'react'
 import Flag from 'react-flagkit'
 
@@ -41,64 +44,130 @@ export const SearchBar = ({
         }
     }
 
+    const handleClear = () => {
+        onSearchChange('')
+    }
+
     const currentLanguage = LANGUAGE_OPTIONS.find(lang => lang.code === language)
 
     return (
-        <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row gap-4 w-full">
-                <div className="flex w-full gap-4">
+        <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="w-full max-w-2xl mx-auto px-4"
+        >
+            <div className="flex items-center bg-white bg-opacity-5 rounded-lg border border-gray-600 overflow-hidden">
+                {/* Search Input */}
+                <div className="flex-1">
                     <TextField
-                        label="Film oder Serie"
-                        variant="outlined"
+                        fullWidth
                         value={searchString}
                         onChange={(e) => onSearchChange(e.target.value)}
                         onKeyPress={handleKeyPress}
+                        placeholder="Suche nach Filmen und Serien..."
                         disabled={disabled}
-                        slotProps={{
-                            input: {
-                                'aria-label': 'Search for movies or TV shows',
-                                endAdornment: (
-                                    <InputAdornment position="end">
-                                        <IconButton
-                                            onClick={onSearch}
-                                            disabled={disabled}
-                                            aria-label="Search"
-                                        >
-                                            <SearchIcon />
-                                        </IconButton>
-                                    </InputAdornment>
-                                ),
-                            },
+                        variant="standard"
+                        size="large"
+                        className="bg-transparent"
+                        InputProps={{
+                            startAdornment: (
+                                <InputAdornment position="start" className="pl-6">
+                                    <motion.div
+                                        animate={{ rotate: searchString ? 360 : 0 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <SearchIcon className="text-gray-400" />
+                                    </motion.div>
+                                </InputAdornment>
+                            ),
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <AnimatePresence>
+                                        {searchString && (
+                                            <motion.div
+                                                initial={{ opacity: 0, scale: 0 }}
+                                                animate={{ opacity: 1, scale: 1 }}
+                                                exit={{ opacity: 0, scale: 0 }}
+                                                transition={{ duration: 0.2 }}
+                                            >
+                                                <IconButton
+                                                    size="small"
+                                                    onClick={handleClear}
+                                                    className="text-gray-400 hover:text-white"
+                                                >
+                                                    <ClearIcon fontSize="small" />
+                                                </IconButton>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </InputAdornment>
+                            ),
+                            sx: {
+                                '& .MuiInput-root': {
+                                    '&:before': {
+                                        borderBottom: 'none',
+                                    },
+                                    '&:after': {
+                                        borderBottom: 'none',
+                                    },
+                                    '&:hover:not(.Mui-disabled):before': {
+                                        borderBottom: 'none',
+                                    },
+                                },
+                                '& .MuiInput-input': {
+                                    padding: '16px 0',
+                                    color: 'white',
+                                    '&::placeholder': {
+                                        color: 'rgba(255, 255, 255, 0.6)',
+                                        opacity: 1,
+                                    },
+                                },
+                            }
                         }}
-                        className="flex-1"
                     />
-                    <Button
-                        onClick={handleMenuOpen}
-                        variant="outlined"
-                        className="flex-none"
-                        disabled={disabled}
-                        aria-label={`Current language: ${currentLanguage?.label}`}
-                    >
-                        <Flag country={currentLanguage?.country || 'US'} />
-                    </Button>
                 </div>
-                <Menu
-                    anchorEl={anchorEl}
-                    open={Boolean(anchorEl)}
-                    onClose={handleMenuClose}
+
+                {/* Language Switch - Square Button */}
+                <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="border-l border-gray-600"
                 >
-                    {LANGUAGE_OPTIONS.map((lang) => (
-                        <MenuItem
-                            key={lang.code}
-                            onClick={() => handleLanguageSelect(lang.code)}
-                            selected={language === lang.code}
-                        >
-                            <Flag country={lang.country} />
-                            <span className="ml-2">{lang.label}</span>
-                        </MenuItem>
-                    ))}
-                </Menu>
+                    <Button
+                        variant="text"
+                        onClick={handleMenuOpen}
+                        className="min-w-0 w-12 h-12 p-0 text-gray-300 hover:text-white hover:bg-white hover:bg-opacity-10 rounded-none"
+                        sx={{
+                            borderRadius: 0,
+                            '&:hover': {
+                                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                            }
+                        }}
+                    >
+                        <Flag country={currentLanguage?.country} size={20} />
+                    </Button>
+                </motion.div>
             </div>
-        </div>
+
+            <Menu
+                anchorEl={anchorEl}
+                open={Boolean(anchorEl)}
+                onClose={handleMenuClose}
+                className="mt-2"
+            >
+                {LANGUAGE_OPTIONS.map((lang) => (
+                    <MenuItem
+                        key={lang.code}
+                        onClick={() => handleLanguageSelect(lang.code)}
+                        selected={lang.code === language}
+                        className="flex items-center gap-3"
+                    >
+                        <Flag country={lang.country} size={20} />
+                        <span>{lang.label}</span>
+                    </MenuItem>
+                ))}
+            </Menu>
+        </motion.div>
     )
 } 

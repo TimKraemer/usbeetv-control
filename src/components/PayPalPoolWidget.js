@@ -1,5 +1,6 @@
 'use client'
 
+import { PAYPAL_CONFIG } from '@/constants/app'
 import { Box, Card, CardActionArea, CardContent, LinearProgress, Typography } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
 
@@ -38,7 +39,7 @@ export const PayPalPoolWidget = () => {
     }, [fetchPoolStatus])
 
     const handleClick = () => {
-        window.open('https://www.paypal.com/pool/9g4yQj1qn7', '_blank')
+        window.open(PAYPAL_CONFIG.POOL_URL, '_blank')
     }
 
     if (error) {

@@ -1,136 +1,129 @@
 'use client'
 
-import { Box, Card, CardActionArea, CardContent, LinearProgress, Typography } from '@mui/material'
-import { useCallback, useEffect, useState } from 'react'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { WidgetCard } from '@/components/ui/WidgetCard'
+import { PAYPAL_CONFIG } from '@/constants/app'
+import { usePolling } from '@/hooks/usePolling'
+import { formatCurrency, formatDate } from '@/utils/formatters'
+import { Box, Typography } from '@mui/material'
+import { motion } from 'framer-motion'
+
+const fetchPoolStatus = async () => {
+    const response = await fetch('/api/paypal-pool-status')
+    if (!response.ok) {
+        throw new Error('Failed to fetch pool status')
+    }
+    return response.json()
+}
 
 export const PayPalPoolWidgetSSR = ({ initialData }) => {
-    const [poolInfo, setPoolInfo] = useState(initialData)
-    const [error, setError] = useState(initialData?.error || null)
-    const [loading, setLoading] = useState(false)
-
-    const fetchPoolStatus = useCallback(async () => {
-        try {
-            setLoading(true)
-            const response = await fetch('/api/paypal-pool-status')
-            if (!response.ok) {
-                throw new Error('Failed to fetch pool status')
-            }
-            const data = await response.json()
-            setPoolInfo(data)
-            setLoading(false)
-            setError(null)
-        } catch (error) {
-            console.error('Error fetching pool status:', error)
-            setError('Failed to load pool status')
-            setLoading(false)
-        }
-    }, [])
-
-    useEffect(() => {
-        // Only start polling if we have valid initial data
-        if (!error && poolInfo && !poolInfo.error) {
-            // Refresh pool status every 5 minutes
-            const intervalId = setInterval(() => {
-                fetchPoolStatus()
-            }, 300000)
-
-            return () => clearInterval(intervalId)
-        }
-    }, [fetchPoolStatus, error, poolInfo])
+    const { data: poolInfo, error, loading } = usePolling({
+        fetchFunction: fetchPoolStatus,
+        interval: 300000, // 5 minutes
+        enabled: initialData && !initialData.error,
+        initialData
+    })
 
     const handleClick = () => {
-        window.open('https://www.paypal.com/pool/9g4yQj1qn7', '_blank')
+        window.open(PAYPAL_CONFIG.POOL_URL, '_blank')
     }
 
-    if (error || (poolInfo?.error)) {
-        return (
-            <Card className="w-full h-full flex flex-col flex-1 cursor-pointer hover:shadow-lg transition-shadow" onClick={handleClick}>
-                <CardContent className="flex-1">
-                    <Typography variant="body2" color="error">
-                        {error || poolInfo?.error}
-                    </Typography>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (loading && !poolInfo) {
-        return (
-            <Card className="w-full h-full flex flex-col flex-1 cursor-pointer hover:shadow-lg transition-shadow" onClick={handleClick}>
-                <CardContent className="flex-1">
-                    <Typography variant="body2" color="textSecondary">
-                        Loading pool status...
-                    </Typography>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (!poolInfo) {
-        return null
-    }
+    if (!poolInfo) return null
 
     const progressPercent = (poolInfo.currentAmount / poolInfo.targetAmount) * 100
     const remainingAmount = poolInfo.targetAmount - poolInfo.currentAmount
 
     return (
-        <Card
-            className="w-full h-full flex flex-col flex-1"
+        <WidgetCard
+            loading={loading && !poolInfo}
+            error={!!error || !!poolInfo?.error}
+            onClick={handleClick}
+            hover={true}
         >
-            <CardActionArea onClick={handleClick}>
-                <CardContent className="pb-4 flex-1 flex flex-col">
-                    <Typography variant="caption" color="textSecondary" className="block mb-2">
-                        PayPal Pool: neue SSD
+            <Box className="flex items-center gap-2 mb-3">
+                <motion.div
+                    initial={{ scale: 0.8 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.3 }}
+                    whileHover={{ scale: 1.1 }}
+                >
+                    <img
+                        src="/euro4ssd.svg"
+                        alt="Euro4SSD"
+                        className="w-6 h-6"
+                    />
+                </motion.div>
+                <Typography variant="caption" color="textSecondary" className="font-medium">
+                    PayPal Pool: neue SSD
+                </Typography>
+            </Box>
+
+            <ProgressBar
+                value={progressPercent}
+                maxValue={100}
+                color="paypal"
+                height={8}
+                showValue={false}
+                animated={true}
+            />
+
+            <Box className="flex justify-between items-center mb-2">
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                >
+                    <Typography variant="body2" color="textSecondary">
+                        {formatCurrency(poolInfo.currentAmount)} / {formatCurrency(poolInfo.targetAmount)}
                     </Typography>
+                </motion.div>
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.4 }}
+                >
+                    <Typography
+                        variant="body2"
+                        color="textSecondary"
+                        className="font-medium"
+                    >
+                        {progressPercent.toFixed(1)}%
+                    </Typography>
+                </motion.div>
+            </Box>
 
-                    <Box className="mb-2">
-                        <LinearProgress
-                            variant="determinate"
-                            value={progressPercent}
-                            className="h-2 rounded"
-                            sx={{
-                                '& .MuiLinearProgress-bar': {
-                                    backgroundColor: '#0070ba' // PayPal blue
-                                }
-                            }}
-                        />
-                    </Box>
+            <Box className="flex justify-between items-center text-xs text-gray-600 mb-3">
+                <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 }}
+                >
+                    <Typography variant="caption" color="textSecondary">
+                        Noch benötigt: {formatCurrency(remainingAmount)}
+                    </Typography>
+                </motion.div>
+            </Box>
 
-                    <Box className="flex justify-between items-center mb-2">
-                        <Typography variant="body2" color="textSecondary">
-                            €{poolInfo.currentAmount.toFixed(2)} / €{poolInfo.targetAmount.toFixed(2)}
-                        </Typography>
-                        <Typography
-                            variant="body2"
-                            color="textSecondary"
-                            className="font-medium"
-                        >
-                            {progressPercent.toFixed(1)}%
-                        </Typography>
-                    </Box>
-
-                    <Box className="flex justify-between items-center text-xs text-gray-600">
-                        <Typography variant="caption" color="textSecondary">
-                            Noch benötigt: €{remainingAmount.toFixed(2)}
-                        </Typography>
-                    </Box>
-
-                    <Box className="flex justify-between mt-2 pt-2 border-t border-gray-200 mt-auto">
-                        <Typography variant="caption" color="textSecondary">
-                            {poolInfo.contributors} Beiträge
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                            Stand: {poolInfo.lastUpdated ? new Date(poolInfo.lastUpdated).toLocaleString('de-DE', {
-                                day: '2-digit',
-                                month: '2-digit',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                            }) : 'N/A'}
-                        </Typography>
-                    </Box>
-                </CardContent>
-            </CardActionArea>
-        </Card>
+            <Box className="flex justify-between mt-2 pt-2 border-t border-gray-200 mt-auto">
+                <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.8 }}
+                >
+                    <Typography variant="caption" color="textSecondary">
+                        {poolInfo.contributors} Beiträge
+                    </Typography>
+                </motion.div>
+                <motion.div
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 1.0 }}
+                >
+                    <Typography variant="caption" color="textSecondary">
+                        Stand: {poolInfo.lastUpdated ? formatDate(poolInfo.lastUpdated) : 'N/A'}
+                    </Typography>
+                </motion.div>
+            </Box>
+        </WidgetCard>
     )
 } 

@@ -1,90 +1,73 @@
 'use client'
 
-import { Box, Card, CardContent, LinearProgress, Typography } from '@mui/material'
-import { useCallback, useEffect, useState } from 'react'
+import { ProgressBar } from '@/components/ui/ProgressBar'
+import { WidgetCard } from '@/components/ui/WidgetCard'
+import { usePolling } from '@/hooks/usePolling'
+import { formatBytes } from '@/utils/formatters'
+import StorageIcon from '@mui/icons-material/Storage'
+import { Box, Typography } from '@mui/material'
+import { motion } from 'framer-motion'
+
+const fetchDiskSpace = async () => {
+    const response = await fetch('/api/disk-space')
+    if (!response.ok) {
+        throw new Error('Failed to fetch disk space')
+    }
+    return response.json()
+}
 
 export const DiskSpaceWidgetSSR = ({ initialData }) => {
-    const [diskInfo, setDiskInfo] = useState(initialData)
-    const [error, setError] = useState(initialData?.error || null)
+    const { data: diskInfo, error, loading } = usePolling({
+        fetchFunction: fetchDiskSpace,
+        interval: 30000,
+        enabled: initialData && !initialData.error,
+        initialData
+    })
 
-    const fetchDiskSpace = useCallback(async () => {
-        try {
-            const response = await fetch('/api/disk-space')
-            if (!response.ok) {
-                throw new Error('Failed to fetch disk space')
-            }
-            const data = await response.json()
-            setDiskInfo(data)
-            setError(null)
-        } catch (error) {
-            console.error('Error fetching disk space:', error)
-            setError('Failed to load disk space')
-        }
-    }, [])
-
-    useEffect(() => {
-        // Only start polling if we have valid initial data
-        if (!error && diskInfo && !diskInfo.error) {
-            // Refresh disk space every 30 seconds
-            const intervalId = setInterval(() => {
-                fetchDiskSpace()
-            }, 30000)
-
-            return () => clearInterval(intervalId)
-        }
-    }, [fetchDiskSpace, error, diskInfo])
-
-    if (error || (diskInfo?.error)) {
-        return (
-            <Card className="w-full h-full flex flex-col flex-1">
-                <CardContent className="flex-1">
-                    <Typography variant="body2" color="error">
-                        {error || diskInfo?.error}
-                    </Typography>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    if (!diskInfo) {
-        return (
-            <Card className="w-full h-full flex flex-col flex-1">
-                <CardContent className="flex-1">
-                    <Typography variant="body2" color="textSecondary">
-                        Loading disk space...
-                    </Typography>
-                </CardContent>
-            </Card>
-        )
-    }
-
-    const usePercent = Number.parseInt(diskInfo.usePercent.replace('%', ''))
+    const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
+        ? Number.parseInt(diskInfo.usePercent.replace('%', ''))
+        : 0
     const isLowSpace = usePercent > 80
 
     return (
-        <Card className="w-full h-full flex flex-col flex-1">
-            <CardContent className="pb-4 flex-1 flex flex-col">
-                {diskInfo.path && (
-                    <Typography variant="caption" color="textSecondary" className="block mb-2">
-                        USBeeTV Speicherplatz
-                    </Typography>
-                )}
-                <Box className="mb-2">
-                    <LinearProgress
-                        variant="determinate"
-                        value={usePercent}
-                        className={`h-2 rounded ${isLowSpace ? 'bg-red-200' : ''}`}
-                        sx={{
-                            '& .MuiLinearProgress-bar': {
-                                backgroundColor: isLowSpace ? '#ef4444' : '#10b981'
-                            }
-                        }}
-                    />
-                </Box>
-                <Box className="flex justify-between items-center mt-auto">
+        <WidgetCard
+            loading={loading && !diskInfo}
+            error={!!error || !!diskInfo?.error}
+            hover={false}
+        >
+            <Box className="flex items-center gap-2 mb-3">
+                <StorageIcon
+                    className={`text-2xl ${isLowSpace ? 'text-red-500' : 'text-green-500'}`}
+                />
+                <Typography variant="caption" color="textSecondary" className="font-medium">
+                    USBeeTV Speicherplatz
+                </Typography>
+            </Box>
+
+            <ProgressBar
+                value={usePercent}
+                maxValue={100}
+                color={isLowSpace ? 'error' : 'success'}
+                height={8}
+                showValue={false}
+                animated={true}
+            />
+
+            <Box className="flex justify-between items-center mt-auto">
+                <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                >
                     <Typography variant="body2" color="textSecondary">
-                        noch frei: {diskInfo.available}
+                        noch frei: {diskInfo?.available || 'N/A'}
                     </Typography>
+                </motion.div>
+                <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                >
                     <Typography
                         variant="body2"
                         color={isLowSpace ? 'error' : 'textSecondary'}
@@ -92,8 +75,8 @@ export const DiskSpaceWidgetSSR = ({ initialData }) => {
                     >
                         {usePercent}% used
                     </Typography>
-                </Box>
-            </CardContent>
-        </Card>
+                </motion.div>
+            </Box>
+        </WidgetCard>
     )
 } 

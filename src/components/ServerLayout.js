@@ -1,7 +1,5 @@
 import SynologyAPI from '@/app/lib/synologyApi'
 import ClientWrapper from '@/components/ClientWrapper'
-import { DiskSpaceWidgetSSR } from '@/components/DiskSpaceWidgetSSR'
-import { PayPalPoolWidgetSSR } from '@/components/PayPalPoolWidgetSSR'
 
 async function fetchDiskSpaceData() {
     try {
@@ -49,16 +47,6 @@ export default async function ServerLayout({ children }) {
 
     return (
         <ClientWrapper>
-            {/* Header with Disk Space Widget and PayPal Pool Widget */}
-            <div className="flex flex-col sm:flex-row justify-center sm:justify-start items-stretch">
-                <div className="m-2 flex-1 h-full flex flex-col">
-                    <DiskSpaceWidgetSSR initialData={diskSpaceData} />
-                </div>
-                <div className="m-2 flex-1 h-full flex flex-col">
-                    <PayPalPoolWidgetSSR initialData={paypalPoolData} />
-                </div>
-            </div>
-
             {children}
         </ClientWrapper>
     )

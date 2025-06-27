@@ -1,13 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { sanitizeSearchString } from '@/utils/formatters'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useClientLanguage } from './useClientLanguage'
 
 // Constants moved inline to prevent import issues
 const SEARCH_CONFIG = {
     MIN_SEARCH_LENGTH: 3,
     DEBOUNCE_DELAY: 300,
-    ALLOWED_CHARS_REGEX: /[^a-zA-Z0-9äöüÄÖÜß ]/g
 }
 
 const SEARCH_TYPES = {
@@ -28,6 +28,18 @@ export const useSearch = () => {
     const [error, setError] = useState(null)
     const [loading, setLoading] = useState(false)
     const { language, setLanguage, isClient } = useClientLanguage()
+
+    // Memoize the sanitized search string
+    const sanitizedSearchString = useMemo(() =>
+        sanitizeSearchString(searchString),
+        [searchString]
+    )
+
+    // Memoize the search validity
+    const isValidSearch = useMemo(() =>
+        sanitizedSearchString.length >= SEARCH_CONFIG.MIN_SEARCH_LENGTH,
+        [sanitizedSearchString]
+    )
 
     const fetchData = useCallback(async (query) => {
         if (!query || query.trim().length < SEARCH_CONFIG.MIN_SEARCH_LENGTH) {
@@ -72,11 +84,9 @@ export const useSearch = () => {
     useEffect(() => {
         if (!isClient) return // Don't search until client is hydrated
 
-        const trimmedSearchString = searchString.trim().replace(SEARCH_CONFIG.ALLOWED_CHARS_REGEX, '')
-
-        if (trimmedSearchString.length >= SEARCH_CONFIG.MIN_SEARCH_LENGTH) {
+        if (isValidSearch) {
             const timeoutId = setTimeout(() => {
-                fetchData(trimmedSearchString)
+                fetchData(sanitizedSearchString)
             }, SEARCH_CONFIG.DEBOUNCE_DELAY)
 
             return () => clearTimeout(timeoutId)
@@ -85,14 +95,13 @@ export const useSearch = () => {
         setMovieResults([])
         setTvResults([])
         setError(null)
-    }, [searchString, fetchData, isClient])
+    }, [sanitizedSearchString, fetchData, isClient, isValidSearch])
 
     const handleSearch = useCallback(() => {
-        const trimmedSearchString = searchString.trim()
-        if (trimmedSearchString.length >= SEARCH_CONFIG.MIN_SEARCH_LENGTH) {
-            fetchData(trimmedSearchString)
+        if (isValidSearch) {
+            fetchData(sanitizedSearchString)
         }
-    }, [searchString, fetchData])
+    }, [sanitizedSearchString, fetchData, isValidSearch])
 
     const clearSearch = useCallback(() => {
         setSearchString('')
@@ -101,7 +110,8 @@ export const useSearch = () => {
         setError(null)
     }, [])
 
-    return {
+    // Memoize the return object to prevent unnecessary re-renders
+    const searchState = useMemo(() => ({
         searchString,
         setSearchString,
         movieResults,
@@ -112,6 +122,21 @@ export const useSearch = () => {
         setLanguage,
         handleSearch,
         clearSearch,
-        isClient
-    }
+        isClient,
+        isValidSearch
+    }), [
+        searchString,
+        movieResults,
+        tvResults,
+        error,
+        loading,
+        language,
+        setLanguage,
+        handleSearch,
+        clearSearch,
+        isClient,
+        isValidSearch
+    ])
+
+    return searchState
 } 

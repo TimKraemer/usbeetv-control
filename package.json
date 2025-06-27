@@ -17,6 +17,7 @@
     "@mui/material": "^7.1.2",
     "@mui/material-nextjs": "^7.1.1",
     "dotenv": "^16.6.0",
+    "framer-motion": "^12.19.2",
     "next": "15.3.4",
     "node-fetch": "^3.3.2",
     "react": "^19.1.0",
