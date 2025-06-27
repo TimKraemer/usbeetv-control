@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
 
 // Temporarily disable SSL certificate verification for development
-if (process.env.NODE_ENV === 'development') {
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
-}
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
 async function fetchFromJellyfin(endpoint, queryParams = '') {
     // Validate environment variables
