@@ -1,6 +1,5 @@
 'use client'
 
-import { DiskSpaceWidget } from '@/components/DiskSpaceWidget'
 import { SearchBar } from '@/components/SearchBar'
 import { SearchResults } from '@/components/SearchResults'
 import { useSearch } from '@/hooks/useSearch'
@@ -21,11 +20,6 @@ export default function SearchContainer() {
 
     return (
         <>
-            {/* Header with Disk Space Widget */}
-            <div className="flex justify-center sm:justify-start row">
-                <DiskSpaceWidget />
-            </div>
-
             {/* Search Section */}
             <SearchBar
                 searchString={searchString}

@@ -3,9 +3,9 @@
 import { Box, Card, CardContent, LinearProgress, Typography } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
 
-export const DiskSpaceWidget = () => {
-    const [diskInfo, setDiskInfo] = useState(null)
-    const [error, setError] = useState(null)
+export const DiskSpaceWidgetSSR = ({ initialData }) => {
+    const [diskInfo, setDiskInfo] = useState(initialData)
+    const [error, setError] = useState(initialData?.error || null)
 
     const fetchDiskSpace = useCallback(async () => {
         try {
@@ -23,22 +23,23 @@ export const DiskSpaceWidget = () => {
     }, [])
 
     useEffect(() => {
-        fetchDiskSpace()
+        // Only start polling if we have valid initial data
+        if (!error && diskInfo && !diskInfo.error) {
+            // Refresh disk space every 30 seconds
+            const intervalId = setInterval(() => {
+                fetchDiskSpace()
+            }, 30000)
 
-        // Refresh disk space every 30 seconds
-        const intervalId = setInterval(() => {
-            fetchDiskSpace()
-        }, 30000)
+            return () => clearInterval(intervalId)
+        }
+    }, [fetchDiskSpace, error, diskInfo])
 
-        return () => clearInterval(intervalId)
-    }, [fetchDiskSpace])
-
-    if (error) {
+    if (error || (diskInfo?.error)) {
         return (
             <Card className="w-full h-full flex flex-col flex-1">
                 <CardContent className="flex-1">
                     <Typography variant="body2" color="error">
-                        {error}
+                        {error || diskInfo?.error}
                     </Typography>
                 </CardContent>
             </Card>

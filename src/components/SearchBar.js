@@ -43,31 +43,6 @@ export const SearchBar = ({
 
     const currentLanguage = LANGUAGE_OPTIONS.find(lang => lang.code === language)
 
-    // Show loading state until client is hydrated
-    if (!isClient) {
-        return (
-            <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col sm:flex-row gap-4 w-full">
-                    <div className="flex w-full gap-4">
-                        <TextField
-                            label="Film oder Serie"
-                            variant="outlined"
-                            disabled={true}
-                            className="flex-1"
-                        />
-                        <Button
-                            variant="outlined"
-                            className="flex-none"
-                            disabled={true}
-                        >
-                            <Flag country="US" />
-                        </Button>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
     return (
         <div className="w-full max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col sm:flex-row gap-4 w-full">

@@ -32,7 +32,7 @@ export const SearchResults = ({
         return (
             <div className="max-w-2xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                 <Typography variant="body1" className="text-gray-400 text-lg">
-                    Um dem USBee TV einen Film oder eine Serie hinzuzufügen, suche ihn zunächst mit der Suchbox und tippe dann auf den gewünschten Titel.
+                    Um dem USBeeTV einen Film oder eine Serie hinzuzufügen, suche ihn zunächst mit der Suchbox und tippe dann auf den gewünschten Titel.
                 </Typography>
             </div>
         )
