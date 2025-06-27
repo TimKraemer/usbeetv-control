@@ -14,7 +14,7 @@ const containerVariants = {
     }
 }
 
-export const ResultsSection = ({ title, results, type, className = '', loading = false }) => {
+export const ResultsSection = ({ title, results, type, className = '', loading = false, language }) => {
     if (!results?.results?.length && !loading) {
         return null
     }
@@ -63,6 +63,7 @@ export const ResultsSection = ({ title, results, type, className = '', loading =
                             result={result}
                             type={type}
                             index={index}
+                            language={language}
                         />
                     ))
                 )}

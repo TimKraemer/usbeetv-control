@@ -9,7 +9,8 @@ export const SearchResults = ({
     movieResults,
     tvResults,
     loading,
-    error
+    error,
+    language
 }) => {
     if (error) {
         return (
@@ -54,12 +55,14 @@ export const SearchResults = ({
                 results={movieResults}
                 type="movie"
                 loading={loading}
+                language={language}
             />
             <ResultsSection
                 title="Serien"
                 results={tvResults}
                 type="tv"
                 loading={loading}
+                language={language}
             />
         </motion.div>
     )

@@ -23,11 +23,48 @@ function rankRow(row) {
     return score
 }
 
+function validateLanguage(row, userLanguage, type) {
+    // Categories 37 and 57 are "English only"
+    // Categories 9 and 55 are "guaranteed German but maybe also English, depends if the name includes 'ML' or 'DL'"
+
+    const isEnglishOnly = row.category === 37 || row.category === 57
+    const isGermanGuaranteed = row.category === 9 || row.category === 55
+
+    if (userLanguage === 'de-DE') {
+        // User wants German
+        if (isEnglishOnly) {
+            return {
+                valid: false,
+                warning: `Diese${type === 'movie' ? 'r Film' : ' Serie'} ist nur auf Englisch verfügbar. Trotzdem laden?`
+            }
+        }
+        // For German-guaranteed categories, both DL and ML include German, so no warning needed
+    } else if (userLanguage === 'en-US') {
+        // User wants English
+        if (isGermanGuaranteed) {
+            const hasML = row.tags.includes('ML')
+            const hasDL = row.tags.includes('DL')
+
+            // If it's German-guaranteed but has neither ML nor DL tags, it might be German-only
+            if (!hasML && !hasDL) {
+                return {
+                    valid: false,
+                    warning: `Diese${type === 'movie' ? 'r Film' : ' Serie'} ist möglicherweise nur auf Deutsch verfügbar. Trotzdem laden?`
+                }
+            }
+            // If it has ML or DL tags, it includes English, so no warning needed
+        }
+    }
+
+    return { valid: true }
+}
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const tmdbId = searchParams.get('tmdbId')
     const type = searchParams.get('type')
+    const language = searchParams.get('language') || 'de-DE'
+    const force = searchParams.get('force') === 'true'
 
     if (!tmdbId) {
         return NextResponse.json({ error: 'TMDB ID is required' }, { status: 400 })
@@ -53,6 +90,7 @@ export async function GET(request) {
             !blacklist.some(term => row.name.toLowerCase().includes(term.toLowerCase()))
         )
         filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
+
         if (type === 'tv') {
             const seasonMap = new Map()
 
@@ -68,15 +106,34 @@ export async function GET(request) {
 
             const bestRows = Array.from(seasonMap.values())
             const results = []
+            let hasLanguageWarning = false
 
             for (const bestRow of bestRows) {
+                if (!force) {
+                    const languageValidation = validateLanguage(bestRow, language, type)
+                    if (!languageValidation.valid && !hasLanguageWarning) {
+                        hasLanguageWarning = true
+                        return NextResponse.json({ languageWarning: languageValidation.warning })
+                    }
+                }
+
                 const result = await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
                 results.push(result)
             }
 
             return NextResponse.json({ filteredRows, results, bestRows })
         }
+
         const bestRow = filteredRows[0]
+
+        if (!force) {
+            const languageValidation = validateLanguage(bestRow, language, type)
+
+            if (!languageValidation.valid) {
+                return NextResponse.json({ languageWarning: languageValidation.warning })
+            }
+        }
+
         return await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
     } catch (error) {
         return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })

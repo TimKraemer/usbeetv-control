@@ -37,6 +37,7 @@ export default function SearchContainer() {
                 tvResults={tvResults}
                 loading={loading}
                 error={error}
+                language={language}
             />
         </>
     )

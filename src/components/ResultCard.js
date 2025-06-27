@@ -6,7 +6,8 @@ import { formatEta } from '@/utils/formatters'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import DownloadIcon from '@mui/icons-material/Download'
 import RuleIcon from '@mui/icons-material/Rule'
-import { Box, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Tooltip, Typography } from "@mui/material"
+import WarningIcon from '@mui/icons-material/Warning'
+import { Alert, Box, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, Tooltip, Typography } from "@mui/material"
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 import { CircularProgressWithLabel } from "./CircularProgressWithLabel"
@@ -14,11 +15,13 @@ import { DownloadDialog } from './DownloadDialog'
 
 const MotionCard = motion.create(Card)
 
-export const ResultCard = ({ result, type, index = 0 }) => {
+export const ResultCard = ({ result, type, index = 0, language }) => {
     const [open, setOpen] = useState(false)
     const [torrentId, setTorrentId] = useState(null)
     const [downloadStarted, setDownloadStarted] = useState(false)
     const [loading, setLoading] = useState(true)
+    const [languageWarning, setLanguageWarning] = useState(null)
+    const [showLanguageDialog, setShowLanguageDialog] = useState(false)
 
     const futureRelease = useFutureRelease(result, type)
     const movieExists = useMovieExistsInDb(result)
@@ -37,9 +40,33 @@ export const ResultCard = ({ result, type, index = 0 }) => {
         if (loading || existsInDb?.exists || downloadStarted) return
 
         setDownloadStarted(true)
+        setLanguageWarning(null)
 
         try {
-            const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}`)
+            const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}&language=${language}`)
+            const data = await response.json()
+            if (data.error) {
+                setOpen(true)
+                setDownloadStarted(false)
+            } else if (data.languageWarning) {
+                setLanguageWarning(data.languageWarning)
+                setShowLanguageDialog(true)
+                setDownloadStarted(false)
+            } else if (data.hash) {
+                setTorrentId(data.hash)
+            }
+        } catch (error) {
+            console.error("Error fetching download:", error)
+            setDownloadStarted(false)
+        }
+    }
+
+    const handleLanguageConfirm = async () => {
+        setShowLanguageDialog(false)
+        setDownloadStarted(true)
+
+        try {
+            const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}&language=${language}&force=true`)
             const data = await response.json()
             if (data.error) {
                 setOpen(true)
@@ -51,6 +78,11 @@ export const ResultCard = ({ result, type, index = 0 }) => {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
         }
+    }
+
+    const handleLanguageCancel = () => {
+        setShowLanguageDialog(false)
+        setLanguageWarning(null)
     }
 
     const isDisabled = loading || existsInDb?.exists || downloadStarted
@@ -65,6 +97,23 @@ export const ResultCard = ({ result, type, index = 0 }) => {
                 result={result}
                 type={type}
             />
+
+            {/* Language Warning Dialog */}
+            <Dialog open={showLanguageDialog} onClose={handleLanguageCancel}>
+                <DialogContent>
+                    <Alert severity="warning" className="mb-4">
+                        {languageWarning}
+                    </Alert>
+                </DialogContent>
+                <DialogActions>
+                    <Button onClick={handleLanguageCancel} color="primary">
+                        Abbrechen
+                    </Button>
+                    <Button onClick={handleLanguageConfirm} color="warning" variant="contained">
+                        Trotzdem herunterladen
+                    </Button>
+                </DialogActions>
+            </Dialog>
 
             <MotionCard
                 key={result.id}
@@ -156,7 +205,19 @@ export const ResultCard = ({ result, type, index = 0 }) => {
                             </motion.div>
                         )}
 
-                        {downloadStarted && !torrentId && (
+                        {languageWarning && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                <Tooltip title={languageWarning}>
+                                    <WarningIcon className="text-2xl text-yellow-500" />
+                                </Tooltip>
+                            </motion.div>
+                        )}
+
+                        {downloadStarted && !torrentId && !languageWarning && (
                             <motion.div
                                 initial={{ opacity: 0, scale: 0 }}
                                 animate={{ opacity: 1, scale: 1 }}
