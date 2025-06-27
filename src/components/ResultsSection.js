@@ -15,7 +15,7 @@ const containerVariants = {
 }
 
 export const ResultsSection = ({ title, results, type, className = '', loading = false, language }) => {
-    if (!results?.results?.length && !loading) {
+    if (!results?.length && !loading) {
         return null
     }
 
@@ -57,7 +57,7 @@ export const ResultsSection = ({ title, results, type, className = '', loading =
                     ))
                 ) : (
                     // Actual results
-                    results?.results?.map((result, index) => (
+                    results?.map((result, index) => (
                         <ResultCard
                             key={result.id}
                             result={result}

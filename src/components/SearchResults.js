@@ -42,6 +42,21 @@ export const SearchResults = ({
         )
     }
 
+    // Always extract the .results array from the API response
+    const movieResultsArray = movieResults?.results || []
+    const tvResultsArray = tvResults?.results || []
+
+    // Helper to extract year for sorting
+    function getYear(result, type) {
+        const dateString = type === 'movie' ? result.release_date : result.first_air_date
+        if (!dateString) return 0
+        return new Date(dateString).getFullYear()
+    }
+
+    // Sort results by year descending
+    const sortedMovieResults = [...movieResultsArray].sort((a, b) => getYear(b, 'movie') - getYear(a, 'movie'))
+    const sortedTvResults = [...tvResultsArray].sort((a, b) => getYear(b, 'tv') - getYear(a, 'tv'))
+
     return (
         <motion.div
             data-testid="search-results"
@@ -52,14 +67,14 @@ export const SearchResults = ({
         >
             <ResultsSection
                 title="Filme"
-                results={movieResults}
+                results={sortedMovieResults}
                 type="movie"
                 loading={loading}
                 language={language}
             />
             <ResultsSection
                 title="Serien"
-                results={tvResults}
+                results={sortedTvResults}
                 type="tv"
                 loading={loading}
                 language={language}

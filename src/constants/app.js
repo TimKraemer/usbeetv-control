@@ -42,6 +42,7 @@ export const API_ENDPOINTS = {
     PROVIDERS: '/api/providers',
     LIBRARY_MOVIES: '/api/library/movies',
     LIBRARY_TVSHOWS: '/api/library/tvshows',
+    LIBRARY_SCAN: '/api/library/scan',
 }
 
 // UI Constants

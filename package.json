@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start --host 0.0.0.0",
     "lint": "next lint",
-    "release": "git push release main:release"
+    "release": "git push release main:release",
+    "test:jellyfin": "node test-jellyfin-api.js"
   },
   "dependencies": {
     "@emotion/cache": "^11.14.0",

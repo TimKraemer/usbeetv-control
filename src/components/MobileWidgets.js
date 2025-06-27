@@ -1,7 +1,9 @@
 'use client'
 
+import { LibraryScanButton } from '@/components/LibraryScanButton'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { PAYPAL_CONFIG } from '@/constants/app'
+import { useDownloadState } from '@/hooks/useDownloadState'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
@@ -16,6 +18,8 @@ export const MobileWidgets = ({
     isCollapsed = false,
     onCollapsedChange,
 }) => {
+    const { hasActiveDownloads } = useDownloadState()
+
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
         ? Number.parseInt(diskInfo.usePercent.replace('%', ''))
@@ -145,24 +149,27 @@ export const MobileWidgets = ({
                                         USBeeTV Speicherplatz
                                     </Typography>
                                 </div>
-                                <IconButton
-                                    size="small"
-                                    onClick={handleDiskClick}
-                                    className="ml-auto"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(255, 255, 255, 0.08)'
-                                        }
-                                    }}
-                                >
-                                    <ExpandMoreIcon
+                                <div className="flex items-center gap-1">
+                                    <LibraryScanButton isVisible={true} />
+                                    <IconButton
+                                        size="small"
+                                        onClick={handleDiskClick}
+                                        className="ml-auto"
                                         sx={{
-                                            transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-                                            transition: 'transform 0.2s ease-in-out'
+                                            color: 'text.secondary',
+                                            '&:hover': {
+                                                backgroundColor: 'rgba(255, 255, 255, 0.08)'
+                                            }
                                         }}
-                                    />
-                                </IconButton>
+                                    >
+                                        <ExpandMoreIcon
+                                            sx={{
+                                                transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                transition: 'transform 0.2s ease-in-out'
+                                            }}
+                                        />
+                                    </IconButton>
+                                </div>
                             </div>
                             <ProgressBar
                                 value={usePercent}
