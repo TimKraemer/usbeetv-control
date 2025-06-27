@@ -50,6 +50,7 @@ export const SeasonSelectionDialog = ({
             setSeasons(data.seasons)
             setShowInfo(data.showInfo)
 
+
             // Pre-select missing seasons that have torrents available
             const missingSeasonsWithTorrents = data.seasons
                 .filter(season => season.isMissing && season.hasTorrent)
@@ -218,8 +219,7 @@ export const SeasonSelectionDialog = ({
                     </Typography>
                     {showInfo && (
                         <Typography variant="body2" className="text-gray-400 mt-2">
-                            {showInfo.totalSeasons} Staffel{showInfo.totalSeasons !== 1 ? 'n' : ''} •
-                            {showInfo.isEnded ? ' Beendet' : ' Läuft noch'}
+                            {showInfo.totalSeasons} Staffel{showInfo.totalSeasons !== 1 ? 'n' : ''}
                         </Typography>
                     )}
                 </DialogTitle>
@@ -254,38 +254,22 @@ export const SeasonSelectionDialog = ({
                                                 ? 'border-blue-500 bg-blue-900 bg-opacity-20'
                                                 : 'border-gray-600 bg-gray-800'
                                             }`}>
-                                            <Box className="flex items-center justify-between mb-2">
+                                            <Box className="flex items-center justify-between gap-2">
                                                 <Typography variant="h6" className="text-white">
                                                     Staffel {season.seasonNumber}
                                                 </Typography>
                                                 {getSeasonStatusIcon(season)}
                                             </Box>
 
-                                            <Typography variant="body2" className="text-gray-300 mb-2">
-                                                {season.name}
-                                            </Typography>
-
-                                            <Typography variant="body2" className="text-gray-400 mb-2">
+                                            <Typography variant="body2" className="text-gray-400">
                                                 {season.episodeCount} Episode{season.episodeCount !== 1 ? 'n' : ''}
                                             </Typography>
-
-                                            {season.torrentInfo && (
-                                                <Box className="mb-2">
-                                                    <Typography variant="caption" className="text-gray-400 block">
-                                                        {formatBytes(season.torrentInfo.size)} •
-                                                        {season.torrentInfo.seeders} Seeder
-                                                    </Typography>
-                                                    <Typography variant="caption" className="text-gray-500 block truncate">
-                                                        {season.torrentInfo.name}
-                                                    </Typography>
-                                                </Box>
-                                            )}
 
                                             <Chip
                                                 label={getSeasonStatusText(season)}
                                                 color={getSeasonStatusColor(season)}
                                                 size="small"
-                                                className="mb-2"
+                                                className="mt-2"
                                             />
 
                                             {season.hasTorrent && !season.existsInLibrary && (
@@ -297,7 +281,7 @@ export const SeasonSelectionDialog = ({
                                                             className="text-blue-500"
                                                         />
                                                     }
-                                                    label="Herunterladen"
+                                                    label="Laden"
                                                     className="text-white"
                                                 />
                                             )}
@@ -342,7 +326,7 @@ export const SeasonSelectionDialog = ({
                                 Lade herunter...
                             </>
                         ) : (
-                            `${selectedSeasons.length} Staffel${selectedSeasons.length !== 1 ? 'n' : ''} herunterladen`
+                            `${selectedSeasons.length} Staffel${selectedSeasons.length !== 1 ? 'n' : ''} laden`
                         )}
                     </Button>
                 </DialogActions>

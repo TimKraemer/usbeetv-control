@@ -3,13 +3,12 @@
 import { LibraryScanButton } from '@/components/LibraryScanButton'
 import { ProgressBar } from '@/components/ui/ProgressBar'
 import { PAYPAL_CONFIG } from '@/constants/app'
-import { useDownloadState } from '@/hooks/useDownloadState'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
 import { Box, IconButton, Typography } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
 export const MobileWidgets = ({
     diskInfo,
@@ -18,7 +17,6 @@ export const MobileWidgets = ({
     isCollapsed = false,
     onCollapsedChange,
 }) => {
-    const { hasActiveDownloads } = useDownloadState()
 
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
@@ -52,9 +50,6 @@ export const MobileWidgets = ({
         onCollapsedChange?.(!isCollapsed)
     }
 
-    const handleManualToggle = () => {
-        onCollapsedChange?.(!isCollapsed)
-    }
 
     return (
         <AnimatePresence>
@@ -204,10 +199,10 @@ export const MobileWidgets = ({
                                     <img
                                         src="/euro4ssd.svg"
                                         alt="Euro4SSD"
-                                        className="w-6 h-6"
+                                        className="w-16 h-16"
                                     />
                                     <Typography variant="caption" color="textSecondary" className="font-medium">
-                                        PayPal Pool: neue SSD
+                                        Hilf mit, mehr Speicherplatz zu kaufen!
                                     </Typography>
                                 </div>
                                 <IconButton
