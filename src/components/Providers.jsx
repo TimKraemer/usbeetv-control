@@ -1,3 +1,5 @@
+import Image from "next/image"
+
 export default function Providers({ providers }) {
   if (!providers) return null
 
@@ -14,9 +16,11 @@ export default function Providers({ providers }) {
               rel="noopener noreferrer"
               className="flex items-center gap-2"
             >
-              <img
+              <Image
                 src={`https://media.themoviedb.org/t/p/original/${provider.logo_path}`}
                 alt={`${provider.provider_name} logo`}
+                width={40}
+                height={40}
                 className="w-10 h-10 rounded-md"
               />
               {provider.provider_name}

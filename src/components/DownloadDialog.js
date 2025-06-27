@@ -40,7 +40,7 @@ export const DownloadDialog = ({ open, onClose, futureRelease, result, type }) =
                     <>
 
                         <Alert severity="warning">
-                            Es wurde leider kein geeigneter Download gefunden. Versuch's in ein paar Tagen nochmal oder frag' Tim, ob er es finden kann.
+                            Es wurde leider kein geeigneter Download gefunden. Versuch&apos;s in ein paar Tagen nochmal oder frag&apos; Tim, ob er es finden kann.
                         </Alert>
                         {providers && providers !== 'not_found' && <Providers providers={providers} />}
                     </>

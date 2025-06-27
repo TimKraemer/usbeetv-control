@@ -16,12 +16,9 @@ export const ResultCard = ({ result, type }) => {
     const [loading, setLoading] = useState(true)
 
     const futureRelease = useFutureRelease(result, type)
-    let existsInDb
-    if (type === 'movie') {
-        existsInDb = useMovieExistsInDb(result)
-    } else if (type === 'tv') {
-        existsInDb = useTvShowExistsInDb(result)
-    }
+    const movieExists = useMovieExistsInDb(result)
+    const tvExists = useTvShowExistsInDb(result)
+    const existsInDb = type === 'movie' ? movieExists : tvExists
 
     useEffect(() => {
         if (existsInDb !== undefined) {
@@ -85,7 +82,7 @@ export const ResultCard = ({ result, type }) => {
                             <Typography variant="body2" color="textSecondary">
                                 {new Date(type === "movie" ? result.release_date : result.first_air_date).getFullYear() || "????"}
                             </Typography>
-                            <Typography variant="h8">
+                            <Typography variant="h6">
                                 {type === "movie"
                                     ? result.title === result.original_title
                                         ? result.title
