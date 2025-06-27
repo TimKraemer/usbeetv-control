@@ -1,9 +1,8 @@
-import { getLibraryFolders, scanSpecificLibrary, triggerLibraryScan } from '@/app/lib/jellyfinApi'
+import { getLibraryFolders, triggerLibraryScan } from '@/app/lib/jellyfinApi'
 import { NextResponse } from 'next/server'
 
 export async function POST(request) {
     try {
-        const { libraryId } = await request.json()
 
         // Scan all libraries
         await triggerLibraryScan()

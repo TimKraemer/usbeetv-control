@@ -8,6 +8,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
 import { Box, IconButton, Typography } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
+import Image from 'next/image'
 import { useEffect } from 'react'
 
 export const MobileWidgets = ({
@@ -104,9 +105,11 @@ export const MobileWidgets = ({
                             whileTap={{ scale: 0.98 }}
                         >
                             <div className="flex items-center gap-2 w-full">
-                                <img
+                                <Image
                                     src="/euro4ssd.svg"
                                     alt="Euro4SSD"
+                                    width={20}
+                                    height={20}
                                     className="w-5 h-5"
                                 />
                                 <div className="flex-1">
@@ -196,9 +199,11 @@ export const MobileWidgets = ({
                         >
                             <div className="flex justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                    <img
+                                    <Image
                                         src="/euro4ssd.svg"
                                         alt="Euro4SSD"
+                                        width={64}
+                                        height={64}
                                         className="w-16 h-16"
                                     />
                                     <Typography variant="caption" color="textSecondary" className="font-medium">

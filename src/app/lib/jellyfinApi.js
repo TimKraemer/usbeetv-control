@@ -65,4 +65,16 @@ export async function triggerLibraryScan() {
         console.error('[ERROR] Failed to trigger Jellyfin library scan:', error.message)
         throw error
     }
-} 
+}
+
+export async function getLibraryFolders() {
+    try {
+        // Get all library folders from Jellyfin
+        const result = await fetchFromJellyfin('/Library/VirtualFolders')
+        console.log('[INFO] Retrieved library folders from Jellyfin')
+        return result
+    } catch (error) {
+        console.error('[ERROR] Failed to get library folders from Jellyfin:', error.message)
+        throw error
+    }
+}
