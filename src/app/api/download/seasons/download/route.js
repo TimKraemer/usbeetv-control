@@ -7,7 +7,6 @@ const tagScores = {
     'HDR10': 1, 'HDR10+': 1,
     'DTS': 1, 'DTSHD': 1, 'DTSHR': 1,
     'Dolby Vision': 1,
-
 }
 
 const blacklist = ['.TS.', 'telesync', ".CAM"]
@@ -24,54 +23,43 @@ function rankRow(row) {
 }
 
 function validateLanguage(row, userLanguage, type) {
-    // Categories 37 and 57 are "English only"
-    // Categories 9 and 55 are "guaranteed German but maybe also English, depends if the name includes 'ML' or 'DL'"
-
     const isEnglishOnly = row.category === 37 || row.category === 57
     const isGermanGuaranteed = row.category === 9 || row.category === 55
 
     if (userLanguage === 'de-DE') {
-        // User wants German
         if (isEnglishOnly) {
             return {
                 valid: false,
                 warning: `Diese${type === 'movie' ? 'r Film' : ' Serie'} ist nur auf Englisch verfügbar. Trotzdem laden?`
             }
         }
-        // For German-guaranteed categories, both DL and ML include German, so no warning needed
     } else if (userLanguage === 'en-US') {
-        // User wants English
         if (isGermanGuaranteed) {
             const hasML = row.tags.includes('ML')
             const hasDL = row.tags.includes('DL')
 
-            // If it's German-guaranteed but has neither ML nor DL tags, it might be German-only
             if (!hasML && !hasDL) {
                 return {
                     valid: false,
                     warning: `Diese${type === 'movie' ? 'r Film' : ' Serie'} ist möglicherweise nur auf Deutsch verfügbar. Trotzdem laden?`
                 }
             }
-            // If it has ML or DL tags, it includes English, so no warning needed
         }
     }
 
     return { valid: true }
 }
 
-export async function GET(request) {
-    const { searchParams } = new URL(request.url)
-    const tmdbId = searchParams.get('tmdbId')
-    const type = searchParams.get('type')
-    const language = searchParams.get('language') || 'de-DE'
-    const force = searchParams.get('force') === 'true'
-
-    if (!tmdbId) {
-        return NextResponse.json({ error: 'TMDB ID is required' }, { status: 400 })
-    }
-
+export async function POST(request) {
     try {
-        const categories = type === 'movie' ? '9,37' : '55,57'
+        const body = await request.json()
+        const { tmdbId, selectedSeasons, language = 'de-DE', force = false } = body
+
+        if (!tmdbId || !selectedSeasons || selectedSeasons.length === 0) {
+            return NextResponse.json({ error: 'TMDB ID and selected seasons are required' }, { status: 400 })
+        }
+
+        const categories = '55,57'
         let response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
@@ -91,26 +79,65 @@ export async function GET(request) {
         )
         filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
 
-        if (type === 'tv') {
-            return NextResponse.json({
-                error: 'TV shows now use season selection. Please use the season selection dialog to choose which seasons to download.',
-                useSeasonSelection: true
-            }, { status: 400 })
-        }
-
-        const bestRow = filteredRows[0]
-
-        if (!force) {
-            const languageValidation = validateLanguage(bestRow, language, type)
-
-            if (!languageValidation.valid) {
-                return NextResponse.json({ languageWarning: languageValidation.warning })
+        // Group torrents by season
+        const seasonMap = new Map()
+        for (const row of filteredRows) {
+            const seasonMatch = row.name.match(/S(\d{2})/)
+            if (seasonMatch) {
+                const seasonNumber = Number.parseInt(seasonMatch[1])
+                if (!seasonMap.has(seasonNumber) || rankRow(row) > rankRow(seasonMap.get(seasonNumber))) {
+                    seasonMap.set(seasonNumber, row)
+                }
             }
         }
 
-        return await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
-    } catch (error) {
-        return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
-    }
-}
+        // Find best torrents for selected seasons
+        const results = []
+        let hasLanguageWarning = false
 
+        for (const seasonNumber of selectedSeasons) {
+            const bestRow = seasonMap.get(seasonNumber)
+
+            if (!bestRow) {
+                results.push({
+                    seasonNumber,
+                    error: `No torrent found for Season ${seasonNumber}`
+                })
+                continue
+            }
+
+            if (!force) {
+                const languageValidation = validateLanguage(bestRow, language, 'tv')
+                if (!languageValidation.valid && !hasLanguageWarning) {
+                    hasLanguageWarning = true
+                    return NextResponse.json({
+                        languageWarning: languageValidation.warning,
+                        seasonNumber
+                    })
+                }
+            }
+
+            try {
+                const result = await sendToDeluge(
+                    `https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`,
+                    'tv'
+                )
+                results.push({
+                    seasonNumber,
+                    success: true,
+                    ...result
+                })
+            } catch (error) {
+                results.push({
+                    seasonNumber,
+                    error: error.message
+                })
+            }
+        }
+
+        return NextResponse.json({ results })
+
+    } catch (error) {
+        return NextResponse.json({ error: `Error downloading seasons: ${error.message}` }, { status: 500 })
+    }
+} 

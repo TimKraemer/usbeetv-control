@@ -38,6 +38,8 @@ export const API_ENDPOINTS = {
     DISK_SPACE: '/api/disk-space',
     PAYPAL_POOL_STATUS: '/api/paypal-pool-status',
     DOWNLOAD: '/api/download',
+    DOWNLOAD_SEASONS: '/api/download/seasons',
+    DOWNLOAD_SEASONS_DOWNLOAD: '/api/download/seasons/download',
     PROGRESS: '/api/progress',
     PROVIDERS: '/api/providers',
     LIBRARY_MOVIES: '/api/library/movies',

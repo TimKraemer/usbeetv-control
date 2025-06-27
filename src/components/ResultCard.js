@@ -13,6 +13,7 @@ import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 import { CircularProgressWithLabel } from "./CircularProgressWithLabel"
 import { DownloadDialog } from './DownloadDialog'
+import { SeasonSelectionDialog } from './SeasonSelectionDialog'
 
 const MotionCard = motion.create(Card)
 
@@ -23,6 +24,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const [loading, setLoading] = useState(true)
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
+    const [showSeasonDialog, setShowSeasonDialog] = useState(false)
 
     const futureRelease = useFutureRelease(result, type)
     const movieExists = useMovieExistsInDb(result)
@@ -39,8 +41,18 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const downloadProgress = useDownloadProgress(torrentId)
 
     const handleCardClick = async () => {
-        if (loading || existsInDb?.exists || downloadStarted) return
+        if (loading || downloadStarted) return
 
+        // For TV shows, always show season selection dialog (regardless of existence)
+        if (type === 'tv') {
+            setShowSeasonDialog(true)
+            return
+        }
+
+        // For movies, check if they exist and disable if they do
+        if (existsInDb?.exists) return
+
+        // For movies, use the existing download logic
         setDownloadStarted(true)
         setLanguageWarning(null)
         startDownload()
@@ -61,6 +73,15 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
         } catch (error) {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
+        }
+    }
+
+    const handleSeasonDownloadComplete = (results) => {
+        // Handle season download completion
+        const successfulDownloads = results.filter(r => r.success)
+        if (successfulDownloads.length > 0) {
+            startDownload()
+            // You could set a torrent ID here if needed, or just show success
         }
     }
 
@@ -89,7 +110,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
         setLanguageWarning(null)
     }
 
-    const isDisabled = loading || existsInDb?.exists || downloadStarted
+    const isDisabled = loading || (type === 'movie' && existsInDb?.exists) || downloadStarted
     const title = type === "movie" ? result.title : result.name
 
     // Extract year from release date
@@ -109,6 +130,15 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                 futureRelease={futureRelease}
                 result={result}
                 type={type}
+            />
+
+            <SeasonSelectionDialog
+                open={showSeasonDialog}
+                onClose={() => setShowSeasonDialog(false)}
+                tmdbId={result.id}
+                showName={title}
+                language={language}
+                onDownloadComplete={handleSeasonDownloadComplete}
             />
 
             {/* Language Warning Dialog */}
@@ -203,7 +233,15 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                                 animate={{ opacity: 1, scale: 1 }}
                                 transition={{ duration: 0.3 }}
                             >
-                                <Tooltip title={existsInDb.isComplete ? "Vollständig verfügbar" : "Teilweise verfügbar"}>
+                                <Tooltip title={
+                                    type === 'tv'
+                                        ? (existsInDb.isComplete
+                                            ? "Vollständig verfügbar - Klicken für Staffel-Auswahl"
+                                            : "Teilweise verfügbar - Klicken für fehlende Staffeln")
+                                        : (existsInDb.isComplete
+                                            ? "Vollständig verfügbar"
+                                            : "Teilweise verfügbar")
+                                }>
                                     <CheckCircleIcon
                                         className={`text-2xl ${existsInDb.isComplete ? 'text-green-500' : 'text-yellow-500'}`}
                                     />
@@ -287,7 +325,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                     )}
 
                     {/* Download Icon Overlay */}
-                    {!isDisabled && !downloadProgress.progress && (
+                    {((!isDisabled && !downloadProgress.progress) || (type === 'tv' && !downloadProgress.progress)) && (
                         <motion.div
                             className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center transition-all duration-300"
                             initial={{ opacity: 0 }}

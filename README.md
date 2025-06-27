@@ -5,6 +5,7 @@ A Next.js application for managing movie and TV show downloads to USBee TV, with
 ## Features
 
 - **Search & Download**: Search for movies and TV shows using TMDB API
+- **TV Show Season Selection**: Select specific seasons to download for TV shows with visual feedback on library status
 - **Automatic Library Scanning**: Automatically triggers Jellyfin library scans when downloads complete
 - **Manual Library Scanning**: Manual trigger for Jellyfin library scans via UI
 - **Progress Tracking**: Real-time download progress monitoring
@@ -70,6 +71,27 @@ PAYPAL_POOL_CONTRIBUTORS="8"
 PAYPAL_POOL_LAST_UPDATED="2025-06-27T15:30:00.000Z"
 ```
 
+## TV Show Season Selection
+
+The application now provides an enhanced experience for downloading TV shows:
+
+### Season Selection Dialog
+- **Visual Status**: Each season shows its current status (in library, available for download, or not available)
+- **Smart Pre-selection**: Missing seasons with available torrents are automatically pre-selected
+- **Detailed Information**: Shows episode count, file size, seeders, and torrent quality information
+- **Flexible Selection**: Users can select any combination of available seasons
+
+### Library Integration
+- **Real-time Status**: Checks Jellyfin library to determine which seasons already exist
+- **Missing Season Detection**: Automatically identifies seasons that need to be downloaded
+- **Complete Series Support**: Handles both ongoing and completed TV series
+
+### Download Process
+- **Batch Downloads**: Downloads multiple selected seasons simultaneously
+- **Language Validation**: Checks language availability and warns users about potential language mismatches
+- **Progress Tracking**: Shows download progress for each season
+- **Error Handling**: Provides detailed feedback for failed downloads
+
 ## Jellyfin Library Scanning
 
 The application automatically triggers Jellyfin library scans when downloads complete. This ensures that newly downloaded content is immediately available in Jellyfin.
@@ -87,7 +109,9 @@ The application automatically triggers Jellyfin library scans when downloads com
 ## API Endpoints
 
 - `/api/search` - Search for movies and TV shows
-- `/api/download` - Download torrents
+- `/api/download` - Download torrents (movies only)
+- `/api/download/seasons` - Get available seasons for TV show selection
+- `/api/download/seasons/download` - Download selected TV show seasons
 - `/api/progress` - Get download progress (triggers auto-scan on completion)
 - `/api/library/scan` - Manual library scan trigger
 - `/api/library/movies` - Check if movie exists in Jellyfin
