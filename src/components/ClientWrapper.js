@@ -16,7 +16,7 @@ export default function ClientWrapper({ children }) {
         <AppRouterCacheProvider>
             <ThemeProvider theme={darkTheme}>
                 <CssBaseline />
-                <div className="bg-gray-900 min-h-screen">
+                <div className="bg-black min-h-screen">
                     <div className="max-w-[1200px] mx-auto">
                         <main className="flex flex-col gap-6 sm:gap-8">
                             {children}
