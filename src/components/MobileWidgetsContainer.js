@@ -3,12 +3,13 @@
 import { useEffect, useState } from 'react'
 import { MobileWidgets } from './MobileWidgets'
 
-export const MobileWidgetsContainer = () => {
+export const MobileWidgetsContainer = ({ onCollapsedChange }) => {
     const [diskInfo, setDiskInfo] = useState(null)
     const [poolInfo, setPoolInfo] = useState(null)
     const [diskError, setDiskError] = useState(null)
     const [poolError, setPoolError] = useState(null)
     const [hasSearchResults, setHasSearchResults] = useState(false)
+    const [isCollapsed, setIsCollapsed] = useState(false)
 
     // Check for search results by observing the DOM
     useEffect(() => {
@@ -33,6 +34,13 @@ export const MobileWidgetsContainer = () => {
 
         return () => observer.disconnect()
     }, [])
+
+    // Notify parent when collapsed state changes
+    useEffect(() => {
+        if (onCollapsedChange) {
+            onCollapsedChange(isCollapsed)
+        }
+    }, [isCollapsed, onCollapsedChange])
 
     useEffect(() => {
         // Fetch disk space data
@@ -88,6 +96,8 @@ export const MobileWidgetsContainer = () => {
             diskInfo={diskInfo}
             poolInfo={poolInfo}
             hasSearchResults={hasSearchResults}
+            isCollapsed={isCollapsed}
+            onCollapsedChange={setIsCollapsed}
         />
     )
 } 

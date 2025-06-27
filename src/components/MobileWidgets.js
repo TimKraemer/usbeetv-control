@@ -13,9 +13,9 @@ export const MobileWidgets = ({
     diskInfo,
     poolInfo,
     hasSearchResults = false,
+    isCollapsed = false,
+    onCollapsedChange,
 }) => {
-    const [isCollapsed, setIsCollapsed] = useState(false)
-
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
         ? Number.parseInt(diskInfo.usePercent.replace('%', ''))
@@ -30,26 +30,26 @@ export const MobileWidgets = ({
     // Auto-collapse when search has results
     useEffect(() => {
         if (hasSearchResults) {
-            setIsCollapsed(true)
+            onCollapsedChange?.(true)
         } else {
-            setIsCollapsed(false)
+            onCollapsedChange?.(false)
         }
-    }, [hasSearchResults])
+    }, [hasSearchResults, onCollapsedChange])
 
     const handlePayPalClick = () => {
         if (isCollapsed) {
-            setIsCollapsed(false)
+            onCollapsedChange?.(false)
         } else {
             window.open(PAYPAL_CONFIG.POOL_URL, '_blank')
         }
     }
 
     const handleDiskClick = () => {
-        setIsCollapsed((prev) => !prev)
+        onCollapsedChange?.(!isCollapsed)
     }
 
     const handleManualToggle = () => {
-        setIsCollapsed(!isCollapsed)
+        onCollapsedChange?.(!isCollapsed)
     }
 
     return (
