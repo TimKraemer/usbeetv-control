@@ -44,7 +44,7 @@ export const SearchResults = ({
     return (
         <motion.div
             data-testid="search-results"
-            className="flex flex-col lg:flex-row gap-8 w-full"
+            className="flex flex-col gap-8 w-full"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
