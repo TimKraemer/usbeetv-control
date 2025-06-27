@@ -20,18 +20,17 @@ export default function SearchContainer() {
 
     return (
         <>
-            {/* Search Section */}
+            {/* Search Section - Only receives stable props */}
             <SearchBar
                 searchString={searchString}
                 onSearchChange={setSearchString}
                 onSearch={handleSearch}
                 language={language}
                 onLanguageChange={setLanguage}
-                disabled={loading}
                 isClient={isClient}
             />
 
-            {/* Content Section */}
+            {/* Content Section - Receives search results */}
             <SearchResults
                 searchString={searchString}
                 movieResults={movieResults}

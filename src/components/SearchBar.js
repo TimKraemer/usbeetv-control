@@ -5,7 +5,7 @@ import LanguageIcon from '@mui/icons-material/Language'
 import SearchIcon from '@mui/icons-material/Search'
 import { Button, IconButton, InputAdornment, Menu, MenuItem, TextField } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import Flag from 'react-flagkit'
 
 // Constants moved inline to prevent import issues
@@ -14,16 +14,30 @@ const LANGUAGE_OPTIONS = [
     { code: 'de-DE', country: 'DE', label: 'Deutsch' }
 ]
 
-export const SearchBar = ({
+export const SearchBar = memo(({
     searchString,
     onSearchChange,
     onSearch,
     language,
     onLanguageChange,
-    disabled = false,
     isClient = true
 }) => {
     const [anchorEl, setAnchorEl] = useState(null)
+    const inputRef = useRef(null)
+    const wasFocusedRef = useRef(false)
+
+    // Preserve focus across re-renders
+    useEffect(() => {
+        if (wasFocusedRef.current && inputRef.current) {
+            // Small delay to ensure the DOM has updated
+            const timeoutId = setTimeout(() => {
+                if (inputRef.current) {
+                    inputRef.current.focus()
+                }
+            }, 0)
+            return () => clearTimeout(timeoutId)
+        }
+    })
 
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget)
@@ -46,6 +60,18 @@ export const SearchBar = ({
 
     const handleClear = () => {
         onSearchChange('')
+        // Maintain focus after clearing
+        if (inputRef.current) {
+            inputRef.current.focus()
+        }
+    }
+
+    const handleInputFocus = () => {
+        wasFocusedRef.current = true
+    }
+
+    const handleInputBlur = () => {
+        wasFocusedRef.current = false
     }
 
     const currentLanguage = LANGUAGE_OPTIONS.find(lang => lang.code === language)
@@ -61,12 +87,14 @@ export const SearchBar = ({
                 {/* Search Input */}
                 <div className="flex-1">
                     <TextField
+                        ref={inputRef}
                         fullWidth
                         value={searchString}
                         onChange={(e) => onSearchChange(e.target.value)}
                         onKeyPress={handleKeyPress}
+                        onFocus={handleInputFocus}
+                        onBlur={handleInputBlur}
                         placeholder="Suche nach Filmen und Serien..."
-                        disabled={disabled}
                         variant="standard"
                         size="large"
                         className="bg-transparent"
@@ -170,4 +198,6 @@ export const SearchBar = ({
             </Menu>
         </motion.div>
     )
-} 
+})
+
+SearchBar.displayName = 'SearchBar' 

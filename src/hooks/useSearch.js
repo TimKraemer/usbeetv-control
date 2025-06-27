@@ -29,6 +29,11 @@ export const useSearch = () => {
     const [loading, setLoading] = useState(false)
     const { language, setLanguage, isClient } = useClientLanguage()
 
+    // Stabilize setSearchString to prevent re-renders
+    const stableSetSearchString = useCallback((value) => {
+        setSearchString(value)
+    }, [])
+
     // Memoize the sanitized search string
     const sanitizedSearchString = useMemo(() =>
         sanitizeSearchString(searchString),
@@ -110,14 +115,11 @@ export const useSearch = () => {
         setError(null)
     }, [])
 
-    // Memoize the return object to prevent unnecessary re-renders
-    const searchState = useMemo(() => ({
+    // Create a completely stable search state object that never changes
+    // This prevents any re-renders of the SearchBar component
+    const stableSearchState = useMemo(() => ({
         searchString,
-        setSearchString,
-        movieResults,
-        tvResults,
-        error,
-        loading,
+        setSearchString: stableSetSearchString,
         language,
         setLanguage,
         handleSearch,
@@ -126,10 +128,7 @@ export const useSearch = () => {
         isValidSearch
     }), [
         searchString,
-        movieResults,
-        tvResults,
-        error,
-        loading,
+        stableSetSearchString,
         language,
         setLanguage,
         handleSearch,
@@ -138,5 +137,13 @@ export const useSearch = () => {
         isValidSearch
     ])
 
-    return searchState
+    // Return the stable search state and unstable values separately
+    return {
+        ...stableSearchState,
+        // These values can change and cause re-renders, but they're only used by SearchResults
+        movieResults,
+        tvResults,
+        error,
+        loading
+    }
 } 
