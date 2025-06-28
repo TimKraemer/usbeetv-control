@@ -37,6 +37,7 @@ export const API_ENDPOINTS = {
     SEARCH: '/api/search',
     DISK_SPACE: '/api/disk-space',
     PAYPAL_POOL_STATUS: '/api/paypal-pool-status',
+    PAYPAL_POOL_URL: '/api/paypal-pool-url',
     POOL_EDIT: '/api/pool-edit',
     POOL_EDIT_AUTH: '/api/pool-edit/auth',
     DOWNLOAD: '/api/download',
@@ -68,7 +69,7 @@ export const COLORS = {
 
 // PayPal Pool Configuration
 export const PAYPAL_CONFIG = {
-    POOL_URL: process.env.NEXT_PUBLIC_PAYPAL_POOL_URL || "__PAYPAL_POOL_URL_NOT_SET__",
+    // URL will be fetched from API endpoint
 }
 
 // TMDB Configuration

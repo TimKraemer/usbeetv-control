@@ -2,14 +2,14 @@
 
 import { LibraryScanButton } from '@/components/LibraryScanButton'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-import { PAYPAL_CONFIG } from '@/constants/app'
+import { API_ENDPOINTS } from '@/constants/app'
 import { formatCurrency, formatDate } from '@/utils/formatters'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
 import { Box, IconButton, Typography } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
 import Image from 'next/image'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export const MobileWidgets = ({
     diskInfo,
@@ -18,6 +18,24 @@ export const MobileWidgets = ({
     isCollapsed = false,
     onCollapsedChange,
 }) => {
+    const [paypalPoolUrl, setPaypalPoolUrl] = useState(null)
+
+    // Fetch PayPal pool URL on component mount
+    useEffect(() => {
+        const fetchPaypalPoolUrl = async () => {
+            try {
+                const response = await fetch(API_ENDPOINTS.PAYPAL_POOL_URL)
+                if (response.ok) {
+                    const data = await response.json()
+                    setPaypalPoolUrl(data.url)
+                }
+            } catch (error) {
+                console.error('Failed to fetch PayPal pool URL:', error)
+            }
+        }
+
+        fetchPaypalPoolUrl()
+    }, [])
 
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
@@ -42,8 +60,8 @@ export const MobileWidgets = ({
     const handlePayPalClick = () => {
         if (isCollapsed) {
             onCollapsedChange?.(false)
-        } else {
-            window.open(PAYPAL_CONFIG.POOL_URL, '_blank')
+        } else if (paypalPoolUrl && paypalPoolUrl !== "__PAYPAL_POOL_URL_NOT_SET__") {
+            window.open(paypalPoolUrl, '_blank')
         }
     }
 
