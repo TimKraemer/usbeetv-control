@@ -3,20 +3,20 @@ import { useDownloadState } from '@/hooks/useDownloadState'
 import { useEffect, useState } from "react"
 
 // Custom hook to manage download progress
-export const useDownloadProgress = (torrentId) => {
+export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title = null) => {
     const [downloadProgress, setDownloadProgress] = useState({ progress: 0, eta: 0, state: '', isComplete: false })
-    const { stopDownload } = useDownloadState()
+    const { startDownload, updateDownloadProgress, stopDownload } = useDownloadState()
 
     useEffect(() => {
-        console.log('useDownloadProgress: torrentId changed to:', torrentId)
         if (!torrentId) return
+
+        // Register this download with the global state
+        startDownload(torrentId, tmdbId, type, title)
 
         const fetchDownloadProgress = async () => {
             try {
-                console.log('Fetching progress for torrent ID:', torrentId)
                 const response = await fetch(`/api/progress?torrentId=${torrentId}`)
                 const data = await response.json()
-                console.log('Progress data received:', data)
                 const newProgress = {
                     progress: Math.round(data.progress),
                     eta: data.eta,
@@ -25,11 +25,14 @@ export const useDownloadProgress = (torrentId) => {
                 }
                 setDownloadProgress(newProgress)
 
+                // Update global state with progress
+                updateDownloadProgress(torrentId, newProgress.progress, newProgress.eta, newProgress.state)
+
                 // If download is complete, notify the context to stop tracking active downloads
                 if (newProgress.isComplete) {
                     // Delay stopping the download state to allow for library scan feedback
                     setTimeout(() => {
-                        stopDownload()
+                        stopDownload(torrentId)
                     }, 10000) // 10 second delay to show completion status
                 }
             } catch (error) {
@@ -40,7 +43,7 @@ export const useDownloadProgress = (torrentId) => {
         fetchDownloadProgress()
         const intervalId = setInterval(fetchDownloadProgress, 5000)
         return () => clearInterval(intervalId)
-    }, [torrentId, stopDownload])
+    }, [torrentId, tmdbId, type, title, startDownload, updateDownloadProgress, stopDownload])
 
     return downloadProgress
 }

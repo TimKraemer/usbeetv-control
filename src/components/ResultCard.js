@@ -4,11 +4,12 @@ import { useMovieExistsInDb, useTvShowExistsInDb } from '@/app/lib/useExistsInDb
 import { useFutureRelease } from '@/app/lib/useFutureRelease'
 import { useDownloadState } from '@/hooks/useDownloadState'
 import { formatEta } from '@/utils/formatters'
+import CancelIcon from '@mui/icons-material/Cancel'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import DownloadIcon from '@mui/icons-material/Download'
 import RuleIcon from '@mui/icons-material/Rule'
 import WarningIcon from '@mui/icons-material/Warning'
-import { Alert, Box, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, Tooltip, Typography } from "@mui/material"
+import { Alert, Box, Button, Card, CardActionArea, CardContent, CardMedia, CircularProgress, Dialog, DialogActions, DialogContent, IconButton, Tooltip, Typography } from "@mui/material"
 import { motion } from "framer-motion"
 import { useEffect, useState } from "react"
 import { CircularProgressWithLabel } from "./CircularProgressWithLabel"
@@ -27,12 +28,14 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
     const [showSeasonDialog, setShowSeasonDialog] = useState(false)
+    const [cancelling, setCancelling] = useState(false)
 
     const futureRelease = useFutureRelease(result, type)
     const movieExists = useMovieExistsInDb(result)
     const tvExists = useTvShowExistsInDb(result)
     const existsInDb = type === 'movie' ? movieExists : tvExists
-    const { startDownload } = useDownloadState()
+    const { startDownload, activeDownloads, cancelDownload } = useDownloadState()
+    const title = type === "movie" ? result.title : result.name
 
     useEffect(() => {
         if (existsInDb !== undefined) {
@@ -40,7 +43,17 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
         }
     }, [existsInDb])
 
-    const downloadProgress = useDownloadProgress(torrentId)
+    // Check if this item has an active download on mount
+    useEffect(() => {
+        const activeDownload = activeDownloads.find(d => d.tmdbId === result.id && d.type === type)
+        if (activeDownload) {
+            setTorrentId(activeDownload.torrentId)
+            setDownloadStarted(true)
+            setDownloadInitiated(false) // Don't show "Starte Download" since it's already started
+        }
+    }, [activeDownloads, result.id, type])
+
+    const downloadProgress = useDownloadProgress(torrentId, result.id, type, title)
 
     // Reset downloadInitiated when torrentId is set (progress tracking starts)
     useEffect(() => {
@@ -50,7 +63,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     }, [torrentId, downloadInitiated])
 
     const handleCardClick = async () => {
-        if (loading || downloadStarted || downloadInitiated) return
+        if (loading || downloadStarted || downloadInitiated) return // Prevent double-clicks
 
         // For TV shows, always show season selection dialog (regardless of existence)
         if (type === 'tv') {
@@ -63,9 +76,9 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
 
         // For movies, use the existing download logic
         setDownloadStarted(true)
-        setDownloadInitiated(true)
+        setDownloadInitiated(true) // Set initiated state
         setLanguageWarning(null)
-        startDownload()
+        startDownload() // Start without torrent ID initially
 
         try {
             const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}&language=${language}`)
@@ -73,42 +86,38 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
             if (data.error) {
                 setOpen(true)
                 setDownloadStarted(false)
-                setDownloadInitiated(false)
+                setDownloadInitiated(false) // Reset initiated state
             } else if (data.languageWarning) {
                 setLanguageWarning(data.languageWarning)
                 setShowLanguageDialog(true)
                 setDownloadStarted(false)
-                setDownloadInitiated(false)
+                setDownloadInitiated(false) // Reset initiated state
             } else if (data.hash) {
                 setTorrentId(data.hash)
+                // Update the download state with the torrent ID
+                startDownload(data.hash, result.id, type, title)
             }
         } catch (error) {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
-            setDownloadInitiated(false)
+            setDownloadInitiated(false) // Reset initiated state
         }
     }
 
     const handleSeasonDownloadComplete = (results) => {
         // Handle season download completion
-        console.log('Season download complete, results:', results)
         const successfulDownloads = results.filter(r => r.success)
-        console.log('Successful downloads:', successfulDownloads)
         if (successfulDownloads.length > 0) {
-            startDownload()
-            setDownloadInitiated(true)
+            setDownloadInitiated(true) // Set initiated state for TV shows
             // Set the first successful download's hash as the primary torrent ID for progress tracking
             const firstSuccessful = successfulDownloads[0]
-            console.log('First successful download:', firstSuccessful)
             if (firstSuccessful.hash) {
-                console.log('Setting torrent ID to:', firstSuccessful.hash)
                 setTorrentId(firstSuccessful.hash)
-            } else {
-                console.log('No hash found in first successful download')
+                // Register the download with the global state
+                startDownload(firstSuccessful.hash, result.id, type, title)
             }
             // Store all torrent IDs for potential future use
             const hashes = successfulDownloads.map(r => r.hash).filter(Boolean)
-            console.log('All hashes:', hashes)
             setTorrentIds(hashes)
         }
     }
@@ -116,8 +125,8 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const handleLanguageConfirm = async () => {
         setShowLanguageDialog(false)
         setDownloadStarted(true)
-        setDownloadInitiated(true)
-        startDownload()
+        setDownloadInitiated(true) // Set initiated state
+        startDownload() // Start without torrent ID initially
 
         try {
             const response = await fetch(`/api/download?tmdbId=${result.id}&type=${type}&language=${language}&force=true`)
@@ -125,14 +134,16 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
             if (data.error) {
                 setOpen(true)
                 setDownloadStarted(false)
-                setDownloadInitiated(false)
+                setDownloadInitiated(false) // Reset initiated state
             } else if (data.hash) {
                 setTorrentId(data.hash)
+                // Update the download state with the torrent ID
+                startDownload(data.hash, result.id, type, title)
             }
         } catch (error) {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
-            setDownloadInitiated(false)
+            setDownloadInitiated(false) // Reset initiated state
         }
     }
 
@@ -141,8 +152,25 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
         setLanguageWarning(null)
     }
 
+    const handleCancelDownload = async () => {
+        if (!torrentId) return
+
+        setCancelling(true)
+        try {
+            const result = await cancelDownload(torrentId)
+            if (result.success) {
+                setTorrentId(null)
+                setDownloadStarted(false)
+                setDownloadInitiated(false)
+            } else {
+                console.error('Failed to cancel download:', result.error)
+            }
+        } finally {
+            setCancelling(false)
+        }
+    }
+
     const isDisabled = loading || (type === 'movie' && existsInDb?.exists) || downloadStarted || downloadInitiated
-    const title = type === "movie" ? result.title : result.name
 
     // Extract year from release date
     const getYear = () => {
@@ -323,7 +351,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3 }}
                         >
-                            <Box className="text-center">
+                            <Box className="text-center relative">
                                 <CircularProgressWithLabel
                                     value={downloadProgress.progress}
                                     className="text-white"
@@ -331,6 +359,20 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                                 <Typography variant="caption" className="text-white block mt-2">
                                     ETA: {formatEta(downloadProgress.eta)}
                                 </Typography>
+                                <Tooltip title="Download abbrechen">
+                                    <IconButton
+                                        onClick={handleCancelDownload}
+                                        disabled={cancelling}
+                                        size="small"
+                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black bg-opacity-50"
+                                    >
+                                        {cancelling ? (
+                                            <CircularProgress size={16} className="text-red-300" />
+                                        ) : (
+                                            <CancelIcon />
+                                        )}
+                                    </IconButton>
+                                </Tooltip>
                             </Box>
                         </motion.div>
                     )}
@@ -343,11 +385,25 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3 }}
                         >
-                            <Box className="text-center">
+                            <Box className="text-center relative">
                                 <CircularProgress size={48} className="text-blue-500 mb-2" />
                                 <Typography variant="body2" className="text-white font-medium">
                                     Starte Download...
                                 </Typography>
+                                <Tooltip title="Download abbrechen">
+                                    <IconButton
+                                        onClick={handleCancelDownload}
+                                        disabled={cancelling}
+                                        size="small"
+                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black bg-opacity-50"
+                                    >
+                                        {cancelling ? (
+                                            <CircularProgress size={16} className="text-red-300" />
+                                        ) : (
+                                            <CancelIcon />
+                                        )}
+                                    </IconButton>
+                                </Tooltip>
                             </Box>
                         </motion.div>
                     )}
