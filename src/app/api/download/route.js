@@ -108,7 +108,8 @@ export async function GET(request) {
             }
         }
 
-        return await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
+        const result = await sendToDeluge(`https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`, type)
+        return NextResponse.json(result)
     } catch (error) {
         return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
     }

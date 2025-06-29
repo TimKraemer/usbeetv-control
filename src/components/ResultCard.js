@@ -20,7 +20,9 @@ const MotionCard = motion.create(Card)
 export const ResultCard = ({ result, type, index = 0, language }) => {
     const [open, setOpen] = useState(false)
     const [torrentId, setTorrentId] = useState(null)
+    const [torrentIds, setTorrentIds] = useState([])
     const [downloadStarted, setDownloadStarted] = useState(false)
+    const [downloadInitiated, setDownloadInitiated] = useState(false)
     const [loading, setLoading] = useState(true)
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
@@ -40,8 +42,15 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
 
     const downloadProgress = useDownloadProgress(torrentId)
 
+    // Reset downloadInitiated when torrentId is set (progress tracking starts)
+    useEffect(() => {
+        if (torrentId && downloadInitiated) {
+            setDownloadInitiated(false)
+        }
+    }, [torrentId, downloadInitiated])
+
     const handleCardClick = async () => {
-        if (loading || downloadStarted) return
+        if (loading || downloadStarted || downloadInitiated) return
 
         // For TV shows, always show season selection dialog (regardless of existence)
         if (type === 'tv') {
@@ -54,6 +63,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
 
         // For movies, use the existing download logic
         setDownloadStarted(true)
+        setDownloadInitiated(true)
         setLanguageWarning(null)
         startDownload()
 
@@ -63,31 +73,50 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
             if (data.error) {
                 setOpen(true)
                 setDownloadStarted(false)
+                setDownloadInitiated(false)
             } else if (data.languageWarning) {
                 setLanguageWarning(data.languageWarning)
                 setShowLanguageDialog(true)
                 setDownloadStarted(false)
+                setDownloadInitiated(false)
             } else if (data.hash) {
                 setTorrentId(data.hash)
             }
         } catch (error) {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
+            setDownloadInitiated(false)
         }
     }
 
     const handleSeasonDownloadComplete = (results) => {
         // Handle season download completion
+        console.log('Season download complete, results:', results)
         const successfulDownloads = results.filter(r => r.success)
+        console.log('Successful downloads:', successfulDownloads)
         if (successfulDownloads.length > 0) {
             startDownload()
-            // You could set a torrent ID here if needed, or just show success
+            setDownloadInitiated(true)
+            // Set the first successful download's hash as the primary torrent ID for progress tracking
+            const firstSuccessful = successfulDownloads[0]
+            console.log('First successful download:', firstSuccessful)
+            if (firstSuccessful.hash) {
+                console.log('Setting torrent ID to:', firstSuccessful.hash)
+                setTorrentId(firstSuccessful.hash)
+            } else {
+                console.log('No hash found in first successful download')
+            }
+            // Store all torrent IDs for potential future use
+            const hashes = successfulDownloads.map(r => r.hash).filter(Boolean)
+            console.log('All hashes:', hashes)
+            setTorrentIds(hashes)
         }
     }
 
     const handleLanguageConfirm = async () => {
         setShowLanguageDialog(false)
         setDownloadStarted(true)
+        setDownloadInitiated(true)
         startDownload()
 
         try {
@@ -96,12 +125,14 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
             if (data.error) {
                 setOpen(true)
                 setDownloadStarted(false)
+                setDownloadInitiated(false)
             } else if (data.hash) {
                 setTorrentId(data.hash)
             }
         } catch (error) {
             console.error("Error fetching download:", error)
             setDownloadStarted(false)
+            setDownloadInitiated(false)
         }
     }
 
@@ -110,7 +141,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
         setLanguageWarning(null)
     }
 
-    const isDisabled = loading || (type === 'movie' && existsInDb?.exists) || downloadStarted
+    const isDisabled = loading || (type === 'movie' && existsInDb?.exists) || downloadStarted || downloadInitiated
     const title = type === "movie" ? result.title : result.name
 
     // Extract year from release date
@@ -160,7 +191,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
 
             <MotionCard
                 key={result.id}
-                className={`rounded-lg min-w-[200px] max-w-[250px] flex flex-col bg-transparent relative overflow-hidden ${downloadProgress.progress ? 'bg-black bg-opacity-80' : ''}`}
+                className={`rounded-lg min-w-[200px] max-w-[250px] flex flex-col bg-transparent relative overflow-hidden ${(downloadProgress.progress || downloadInitiated) ? 'bg-black bg-opacity-80' : ''}`}
                 initial={{ opacity: 0, y: 20, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{
@@ -273,7 +304,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                             </motion.div>
                         )}
 
-                        {downloadStarted && !torrentId && !languageWarning && (
+                        {downloadStarted && !torrentId && !languageWarning && !downloadInitiated && (
                             <motion.div
                                 initial={{ opacity: 0, scale: 0 }}
                                 animate={{ opacity: 1, scale: 1 }}
@@ -304,6 +335,23 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                         </motion.div>
                     )}
 
+                    {/* Download Initiated Loading Overlay */}
+                    {downloadInitiated && !downloadProgress.progress && !downloadProgress.isComplete && (
+                        <motion.div
+                            className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <Box className="text-center">
+                                <CircularProgress size={48} className="text-blue-500 mb-2" />
+                                <Typography variant="body2" className="text-white font-medium">
+                                    Starte Download...
+                                </Typography>
+                            </Box>
+                        </motion.div>
+                    )}
+
                     {/* Download Complete Overlay */}
                     {downloadProgress.isComplete && (
                         <motion.div
@@ -325,7 +373,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                     )}
 
                     {/* Download Icon Overlay */}
-                    {((!isDisabled && !downloadProgress.progress) || (type === 'tv' && !downloadProgress.progress)) && (
+                    {((!isDisabled && !downloadProgress.progress && !downloadInitiated) || (type === 'tv' && !downloadProgress.progress && !downloadInitiated)) && (
                         <motion.div
                             className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center transition-all duration-300"
                             initial={{ opacity: 0 }}

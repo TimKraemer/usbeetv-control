@@ -8,12 +8,15 @@ export const useDownloadProgress = (torrentId) => {
     const { stopDownload } = useDownloadState()
 
     useEffect(() => {
+        console.log('useDownloadProgress: torrentId changed to:', torrentId)
         if (!torrentId) return
 
         const fetchDownloadProgress = async () => {
             try {
+                console.log('Fetching progress for torrent ID:', torrentId)
                 const response = await fetch(`/api/progress?torrentId=${torrentId}`)
                 const data = await response.json()
+                console.log('Progress data received:', data)
                 const newProgress = {
                     progress: Math.round(data.progress),
                     eta: data.eta,

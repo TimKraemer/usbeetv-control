@@ -122,12 +122,14 @@ export async function POST(request) {
                     `https://torrent-syndikat.org/download.php?id=${bestRow.id}&apikey=${process.env.TS_API_KEY}`,
                     'tv'
                 )
+                console.log('sendToDeluge result for season', seasonNumber, ':', result)
                 results.push({
                     seasonNumber,
                     success: true,
                     ...result
                 })
             } catch (error) {
+                console.error('Error in sendToDeluge for season', seasonNumber, ':', error)
                 results.push({
                     seasonNumber,
                     error: error.message
