@@ -4,6 +4,16 @@ const nextConfig = {
   env: {
     NEXT_TELEMETRY_DISABLED: "true",
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "media.themoviedb.org",
+        port: "",
+        pathname: "/t/p/**",
+      },
+    ],
+  },
   async headers() {
     return [
       {
