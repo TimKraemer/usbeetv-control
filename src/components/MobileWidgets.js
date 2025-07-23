@@ -225,7 +225,7 @@ export const MobileWidgets = ({
                                         className="w-16 h-16"
                                     />
                                     <Typography variant="caption" color="textSecondary" className="font-medium">
-                                        Hilf mit, mehr Speicherplatz zu kaufen!
+                                        Die neue 4TB SSD ist bestellt! :D - Danke!!
                                     </Typography>
                                 </div>
                                 <IconButton
