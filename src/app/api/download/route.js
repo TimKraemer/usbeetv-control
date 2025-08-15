@@ -10,7 +10,7 @@ const tagScores = {
 
 }
 
-const blacklist = ['.TS.', 'telesync', ".CAM"]
+const blacklist = ['.TS.', 'telesync', ".CAM", ".HDTS"]
 
 function rankRow(row) {
     let score = 0
