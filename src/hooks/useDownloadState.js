@@ -8,47 +8,7 @@ export const DownloadStateProvider = ({ children }) => {
     const [hasActiveDownloads, setHasActiveDownloads] = useState(false)
     const [activeDownloads, setActiveDownloads] = useState([]) // Track individual downloads
 
-    // Load active downloads from localStorage on mount
-    useEffect(() => {
-        try {
-            const stored = localStorage.getItem('activeDownloads')
-            if (stored) {
-                const downloads = JSON.parse(stored)
-                // Clean up downloads older than 24 hours
-                const now = Date.now()
-                const validDownloads = downloads.filter(d => {
-                    const age = now - d.startTime
-                    return age < 24 * 60 * 60 * 1000 // 24 hours
-                })
-
-                if (validDownloads.length !== downloads.length) {
-                    console.log(`Cleaned up ${downloads.length - validDownloads.length} old downloads`)
-                }
-
-                // Mark reconnected downloads as not having real-time progress
-                const reconnectedDownloads = validDownloads.map(d => ({
-                    ...d,
-                    progress: 0, // Reset progress for reconnected downloads
-                    eta: 0,      // Reset ETA for reconnected downloads
-                    reconnected: true // Mark as reconnected
-                }))
-
-                setActiveDownloads(reconnectedDownloads)
-                setHasActiveDownloads(reconnectedDownloads.length > 0)
-            }
-        } catch (error) {
-            console.error('Error loading active downloads from localStorage:', error)
-        }
-    }, [])
-
-    // Save active downloads to localStorage whenever they change
-    useEffect(() => {
-        try {
-            localStorage.setItem('activeDownloads', JSON.stringify(activeDownloads))
-        } catch (error) {
-            console.error('Error saving active downloads to localStorage:', error)
-        }
-    }, [activeDownloads])
+    // No persistence: each session starts clean
 
     const startDownload = (torrentId = null, tmdbId = null, type = null, title = null) => {
         setHasActiveDownloads(true)
