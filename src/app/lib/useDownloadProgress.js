@@ -30,6 +30,7 @@ export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title
 
                 // If download is complete, notify the context to stop tracking active downloads
                 if (newProgress.isComplete) {
+                    if (intervalId) clearInterval(intervalId)
                     // Delay stopping the download state to allow for library scan feedback
                     setTimeout(() => {
                         stopDownload(torrentId)
@@ -40,9 +41,18 @@ export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title
             }
         }
 
-        fetchDownloadProgress()
-        const intervalId = setInterval(fetchDownloadProgress, 5000)
-        return () => clearInterval(intervalId)
+        let intervalId = null
+
+        const startPolling = () => {
+            fetchDownloadProgress()
+            intervalId = setInterval(fetchDownloadProgress, 5000)
+        }
+
+        startPolling()
+
+        return () => {
+            if (intervalId) clearInterval(intervalId)
+        }
     }, [torrentId, tmdbId, type, title, startDownload, updateDownloadProgress, stopDownload])
 
     return downloadProgress

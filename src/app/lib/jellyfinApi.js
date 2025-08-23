@@ -55,9 +55,20 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
 
 export async function triggerLibraryScan() {
     try {
+        // Global dedupe to avoid rapid repeated triggers
+        if (!globalThis.__jellyfinScanCooldown) {
+            globalThis.__jellyfinScanCooldown = { lastAt: 0 }
+        }
+        const now = Date.now()
+        const COOLDOWN_MS = 60 * 1000 // 1 minute
+        if (now - globalThis.__jellyfinScanCooldown.lastAt < COOLDOWN_MS) {
+            return { success: true, skipped: true }
+        }
+        globalThis.__jellyfinScanCooldown.lastAt = now
+
         // Trigger a scan of all libraries using the correct scheduled task endpoint
         const result = await fetchFromJellyfin('/ScheduledTasks/Running/7738148ffcd07979c7ceb148e06b3aed', '', 'POST')
-        console.log('[INFO] Jellyfin library scan triggered successfully')
+        console.info('[INFO] Jellyfin library scan triggered successfully')
         return result
     } catch (error) {
         console.error('[ERROR] Failed to trigger Jellyfin library scan:', error.message)
@@ -69,7 +80,7 @@ export async function getLibraryFolders() {
     try {
         // Get all library folders from Jellyfin
         const result = await fetchFromJellyfin('/Library/VirtualFolders')
-        console.log('[INFO] Retrieved library folders from Jellyfin')
+        console.info('[INFO] Retrieved library folders from Jellyfin')
         return result
     } catch (error) {
         console.error('[ERROR] Failed to get library folders from Jellyfin:', error.message)
