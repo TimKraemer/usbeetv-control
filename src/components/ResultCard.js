@@ -36,6 +36,13 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const existsInDb = type === 'movie' ? movieExists : tvExists
     const { startDownload, activeDownloads, cancelDownload } = useDownloadState()
     const title = type === "movie" ? result.title : result.name
+    const tmdbUrl = type === 'movie' ? `https://www.themoviedb.org/movie/${result.id}` : `https://www.themoviedb.org/tv/${result.id}`
+    const vote = Number.isFinite(result.vote_average) ? result.vote_average : (result.vote_average ? Number.parseFloat(result.vote_average) : null)
+    let ratingBg = 'bg-red-600/90'
+    if (vote !== null && vote > 0) {
+        if (vote >= 7) ratingBg = 'bg-green-600/90'
+        else if (vote >= 5) ratingBg = 'bg-yellow-500/90'
+    }
 
     useEffect(() => {
         if (existsInDb !== undefined) {
@@ -238,6 +245,13 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                     className="flex flex-col h-full relative"
                     disabled={isDisabled}
                 >
+                    {/* Rating badge (top-left) */}
+                    {vote !== null && vote > 0 && (
+                        <div className={`absolute top-2 left-2 w-9 h-9 rounded-full ${ratingBg} text-white flex items-center justify-center text-xs font-semibold shadow-md z-10`}
+                        >
+                            {vote.toFixed(1)}
+                        </div>
+                    )}
                     {result.poster_path ? (
                         <CardMedia
                             component="img"
@@ -273,6 +287,19 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                             {year ? `(${year})` : ''}
                         </Typography>
                     </CardContent>
+
+                    {/* TMDB link badge (bottom-left) */}
+                    <a
+                        href={tmdbUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        referrerPolicy="no-referrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute bottom-2 right-2 bg-gray-600/90 hover:bg-gray-600 text-white text-[10px] font-bold px-2 py-1 rounded shadow z-10"
+                        aria-label="Open on TMDB"
+                    >
+                        TMDB
+                    </a>
 
                     {/* Status Overlay */}
                     <Box className="absolute top-2 right-2">
