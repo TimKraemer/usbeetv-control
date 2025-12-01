@@ -66,32 +66,11 @@ export async function triggerLibraryScan() {
         }
         globalThis.__jellyfinScanCooldown.lastAt = now
 
-        // Get all library folders and filter for movies and tvshows only
-        const libraries = await getLibraryFolders()
-        const mediaLibraries = libraries.filter(
-            lib => lib.CollectionType === 'movies' || lib.CollectionType === 'tvshows'
-        )
-
-        if (mediaLibraries.length === 0) {
-            console.warn('[WARN] No movies or tvshows libraries found')
-            return { success: true, libraries: [] }
-        }
-
-        // Trigger refresh for each media library
-        const results = []
-        for (const library of mediaLibraries) {
-            try {
-                await fetchFromJellyfin(`/Items/${library.ItemId}/Refresh`, '?Recursive=true&MetadataRefreshMode=Default&ImageRefreshMode=Default', 'POST')
-                console.info(`[INFO] Triggered scan for library: ${library.Name} (${library.CollectionType})`)
-                results.push({ name: library.Name, type: library.CollectionType, success: true })
-            } catch (error) {
-                console.error(`[ERROR] Failed to scan library ${library.Name}:`, error.message)
-                results.push({ name: library.Name, type: library.CollectionType, success: false, error: error.message })
-            }
-        }
-
-        console.info('[INFO] Jellyfin library scan triggered successfully for movies and TV shows')
-        return { success: true, libraries: results }
+        // Trigger a scan of all libraries using the official Library/Refresh endpoint
+        // Note: Jellyfin's API doesn't support scanning specific libraries only
+        const result = await fetchFromJellyfin('/Library/Refresh', '', 'POST')
+        console.info('[INFO] Jellyfin library scan triggered successfully')
+        return result
     } catch (error) {
         console.error('[ERROR] Failed to trigger Jellyfin library scan:', error.message)
         throw error
