@@ -249,9 +249,9 @@ export const SeasonSelectionDialog = ({
                                 {seasons.map((season) => (
                                     <Grid item xs={12} sm={6} md={4} key={season.seasonNumber}>
                                         <Box className={`p-4 border rounded-lg ${season.existsInLibrary
-                                            ? 'border-green-500 bg-green-900 bg-opacity-20'
+                                            ? 'border-green-500 bg-green-900/20'
                                             : season.hasTorrent
-                                                ? 'border-blue-500 bg-blue-900 bg-opacity-20'
+                                                ? 'border-blue-500 bg-blue-900/20'
                                                 : 'border-gray-600 bg-gray-800'
                                             }`}>
                                             <Box className="flex items-center justify-between gap-2">

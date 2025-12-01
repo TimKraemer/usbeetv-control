@@ -31,7 +31,7 @@ export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title
                 // If download is complete, notify the context to stop tracking active downloads
                 if (newProgress.isComplete) {
                     if (intervalId) clearInterval(intervalId)
-                    // Delay stopping the download state to allow for library scan feedback
+                    // Delay stopping the download state to show completion status
                     setTimeout(() => {
                         stopDownload(torrentId)
                     }, 10000) // 10 second delay to show completion status

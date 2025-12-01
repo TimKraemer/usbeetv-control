@@ -5,15 +5,18 @@ WORKDIR /app
 # install git
 RUN apt-get update && apt-get --yes install git
 
-# Stage 2: pnpm deps
+# Stage 2: bun deps
 FROM git AS deps
 WORKDIR /app
 
+# Install bun
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
 
-COPY package.json yarn.lock ./
+COPY package.json bun.lockb* ./
 
 RUN \
-    if [ -f yarn.lock ]; then yarn install --frozen-lockfile; \
+    if [ -f bun.lockb ]; then bun install --frozen-lockfile; \
     else echo "Lockfile not found." && exit 1; \
     fi
 
@@ -31,7 +34,7 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN yarn build
+RUN bun run build
 
 # Production image, copy all the files and run next
 FROM node:lts-bullseye-slim AS runner

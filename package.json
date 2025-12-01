@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start --host 0.0.0.0",
-    "lint": "next lint",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
     "release": "git push release main:release",
     "test:jellyfin": "node test-jellyfin-api.js"
   },
@@ -14,25 +15,24 @@
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.1.2",
-    "@mui/material": "^7.1.2",
-    "@mui/material-nextjs": "^7.1.1",
-    "dotenv": "^16.6.0",
-    "framer-motion": "^12.19.2",
-    "next": "15.3.4",
+    "@mui/icons-material": "^7.3.5",
+    "@mui/material": "^7.3.5",
+    "@mui/material-nextjs": "^7.3.5",
+    "dotenv": "^17.2.3",
+    "framer-motion": "^12.23.25",
+    "next": "^16.0.6",
     "node-fetch": "^3.3.2",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "react-flagkit": "^2.0.4"
   },
   "devDependencies": {
-    "autoprefixer": "^10.4.0",
+    "@tailwindcss/postcss": "^4.1.17",
+    "autoprefixer": "^10.4.22",
     "biome": "^0.3.3",
-    "eslint": "^9",
-    "eslint-config-next": "15.3.4",
-    "postcss": "^8.4.0",
-    "tailwindcss": "^3.4.0",
-    "typescript": "^5.8.3"
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.9.3"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "bun@1.1.36"
 }

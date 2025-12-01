@@ -44,7 +44,7 @@ export const ClientPageWrapper = () => {
                         transition={{ duration: 0.3 }}
                         className="mb-6"
                     >
-                        <Box className="bg-blue-600 bg-opacity-20 border border-blue-500 rounded-lg p-4">
+                        <Box className="bg-blue-600/20 border border-blue-500 rounded-lg p-4">
                             <div className="flex justify-between items-center mb-3">
                                 <Typography variant="h6" className="text-blue-300">
                                     Aktive Downloads ({activeDownloads.length})
@@ -66,7 +66,7 @@ export const ClientPageWrapper = () => {
                                         initial={{ opacity: 0, scale: 0.8 }}
                                         animate={{ opacity: 1, scale: 1 }}
                                         transition={{ delay: index * 0.1 }}
-                                        className="bg-blue-500 bg-opacity-20 rounded-lg p-3"
+                                        className="bg-blue-500/20 rounded-lg p-3"
                                     >
                                         <div className="flex justify-between items-start mb-2">
                                             <div className="flex-1 min-w-0">
@@ -102,7 +102,7 @@ export const ClientPageWrapper = () => {
                                                 </Typography>
                                             </div>
                                             {download.reconnected ? (
-                                                <div className="h-2 bg-gray-600 bg-opacity-20 rounded-full flex items-center justify-center">
+                                                <div className="h-2 bg-gray-600/20 rounded-full flex items-center justify-center">
                                                     <Typography variant="caption" className="text-gray-400 text-xs">
                                                         Keine Echtzeit-Updates verfügbar
                                                     </Typography>

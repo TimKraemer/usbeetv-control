@@ -35,7 +35,7 @@ export const SearchResults = ({
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
             >
-                <Typography variant="body1" className="text-gray-400 text-lg">
+                <Typography variant="body1" sx={{ color: 'rgba(255, 255, 255, 0.7)' }} className="text-lg">
                     Um dem USBeeTV einen Film oder eine Serie hinzuzufügen, suche ihn zunächst mit der Suchbox und tippe dann auf den gewünschten Titel.
                 </Typography>
             </motion.div>

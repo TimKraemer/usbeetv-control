@@ -14,7 +14,7 @@ export const JellyfinNotice = ({ isCollapsed = false }) => {
                     transition={{ duration: 0.3, ease: "easeInOut" }}
                     className="px-4 sm:px-6 lg:px-8"
                 >
-                    <Box className="bg-blue-500 bg-opacity-10 border border-blue-500 border-opacity-30 rounded-lg p-3 text-center">
+                    <Box className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-center">
                         <Typography variant="body2" className="text-blue-300">
                             Jellyfin ist unter Port <strong>8920</strong> erreichbar -{' '}
                             <a

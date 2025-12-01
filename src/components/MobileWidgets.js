@@ -84,7 +84,7 @@ export const MobileWidgets = ({
                     <div className="flex flex-col gap-2 px-4">
                         {/* Disk Space Widget - Collapsed */}
                         <motion.div
-                            className="flex-1 bg-white bg-opacity-5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
+                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.1 }}
@@ -114,7 +114,7 @@ export const MobileWidgets = ({
 
                         {/* PayPal Pool Widget - Collapsed */}
                         <motion.div
-                            className="flex-1 bg-white bg-opacity-5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
+                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.2 }}
@@ -151,7 +151,7 @@ export const MobileWidgets = ({
                     <div className="flex flex-col sm:flex-row gap-2 px-4">
                         {/* Disk Space Widget - Uncollapsed */}
                         <motion.div
-                            className="flex-1 bg-white bg-opacity-5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0"
+                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0"
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.1 }}
@@ -207,7 +207,7 @@ export const MobileWidgets = ({
 
                         {/* PayPal Pool Widget - Uncollapsed */}
                         <motion.div
-                            className="flex-1 bg-white bg-opacity-5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0 cursor-pointer"
+                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0 cursor-pointer"
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.2 }}

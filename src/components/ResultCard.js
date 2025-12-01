@@ -1,6 +1,5 @@
 'use client'
 import { useDownloadProgress } from '@/app/lib/useDownloadProgress'
-import { useMovieExistsInDb, useTvShowExistsInDb } from '@/app/lib/useExistsInDb'
 import { useFutureRelease } from '@/app/lib/useFutureRelease'
 import { useDownloadState } from '@/hooks/useDownloadState'
 import { formatEta } from '@/utils/formatters'
@@ -18,7 +17,7 @@ import { SeasonSelectionDialog } from './SeasonSelectionDialog'
 
 const MotionCard = motion.create(Card)
 
-export const ResultCard = ({ result, type, index = 0, language }) => {
+export const ResultCard = ({ result, type, index = 0, language, libraryStatus, libraryLoading }) => {
     const [open, setOpen] = useState(false)
     const [torrentId, setTorrentId] = useState(null)
     const [torrentIds, setTorrentIds] = useState([])
@@ -31,9 +30,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     const [cancelling, setCancelling] = useState(false)
 
     const futureRelease = useFutureRelease(result, type)
-    const movieExists = useMovieExistsInDb(result)
-    const tvExists = useTvShowExistsInDb(result)
-    const existsInDb = type === 'movie' ? movieExists : tvExists
+    const existsInDb = libraryStatus
     const { startDownload, activeDownloads, cancelDownload } = useDownloadState()
     const title = type === "movie" ? result.title : result.name
     const tmdbUrl = type === 'movie' ? `https://www.themoviedb.org/movie/${result.id}` : `https://www.themoviedb.org/tv/${result.id}`
@@ -45,10 +42,12 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
     }
 
     useEffect(() => {
-        if (existsInDb !== undefined) {
+        if (!libraryLoading && existsInDb !== undefined) {
             setLoading(false)
+        } else if (libraryLoading) {
+            setLoading(true)
         }
-    }, [existsInDb])
+    }, [existsInDb, libraryLoading])
 
     // Check if this item has an active download on mount
     useEffect(() => {
@@ -226,7 +225,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
 
             <MotionCard
                 key={result.id}
-                className={`rounded-lg min-w-[200px] max-w-[250px] flex flex-col bg-transparent relative overflow-hidden ${(downloadProgress.progress || downloadInitiated) ? 'bg-black bg-opacity-80' : ''}`}
+                className={`rounded-lg min-w-[200px] max-w-[250px] flex flex-col bg-transparent relative overflow-hidden ${(downloadProgress.progress || downloadInitiated) ? 'bg-black/80' : ''}`}
                 initial={{ opacity: 0, y: 20, scale: 0.9 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{
@@ -370,59 +369,39 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                         )}
                     </Box>
 
-                    {/* Download Progress Overlay */}
-                    {downloadProgress.progress > 0 && !downloadProgress.isComplete && (
+                    {/* Download Progress Overlay - Shows immediately when download is initiated */}
+                    {(downloadInitiated || (torrentId && downloadProgress.progress >= 0)) && !downloadProgress.isComplete && (
                         <motion.div
-                            className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+                            className="absolute inset-0 bg-black/50 flex items-center justify-center"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3 }}
                         >
                             <Box className="text-center relative">
-                                <CircularProgressWithLabel
-                                    value={downloadProgress.progress}
-                                    className="text-white"
-                                />
-                                <Typography variant="caption" className="text-white block mt-2">
-                                    ETA: {formatEta(downloadProgress.eta)}
-                                </Typography>
+                                {downloadProgress.progress > 0 ? (
+                                    <>
+                                        <CircularProgressWithLabel
+                                            value={downloadProgress.progress}
+                                            className="text-white"
+                                        />
+                                        <Typography variant="caption" className="text-white block mt-2">
+                                            ETA: {formatEta(downloadProgress.eta)}
+                                        </Typography>
+                                    </>
+                                ) : (
+                                    <>
+                                        <CircularProgress size={48} className="text-blue-500 mb-2" />
+                                        <Typography variant="body2" className="text-white font-medium">
+                                            {downloadInitiated ? 'Starte Download...' : 'Warte auf Status...'}
+                                        </Typography>
+                                    </>
+                                )}
                                 <Tooltip title="Download abbrechen">
                                     <IconButton
                                         onClick={handleCancelDownload}
                                         disabled={cancelling}
                                         size="small"
-                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black bg-opacity-50"
-                                    >
-                                        {cancelling ? (
-                                            <CircularProgress size={16} className="text-red-300" />
-                                        ) : (
-                                            <CancelIcon />
-                                        )}
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        </motion.div>
-                    )}
-
-                    {/* Download Initiated Loading Overlay */}
-                    {downloadInitiated && !downloadProgress.progress && !downloadProgress.isComplete && (
-                        <motion.div
-                            className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            <Box className="text-center relative">
-                                <CircularProgress size={48} className="text-blue-500 mb-2" />
-                                <Typography variant="body2" className="text-white font-medium">
-                                    Starte Download...
-                                </Typography>
-                                <Tooltip title="Download abbrechen">
-                                    <IconButton
-                                        onClick={handleCancelDownload}
-                                        disabled={cancelling}
-                                        size="small"
-                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black bg-opacity-50"
+                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black/50"
                                     >
                                         {cancelling ? (
                                             <CircularProgress size={16} className="text-red-300" />
@@ -438,7 +417,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                     {/* Download Complete Overlay */}
                     {downloadProgress.isComplete && (
                         <motion.div
-                            className="absolute inset-0 bg-green-600 bg-opacity-80 flex items-center justify-center"
+                            className="absolute inset-0 bg-green-600/80 flex items-center justify-center"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             transition={{ duration: 0.3 }}
@@ -448,9 +427,6 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                                 <Typography variant="body2" className="text-white font-medium">
                                     Download abgeschlossen
                                 </Typography>
-                                <Typography variant="caption" className="text-white block mt-1">
-                                    Bibliothek wird gescannt...
-                                </Typography>
                             </Box>
                         </motion.div>
                     )}
@@ -458,7 +434,7 @@ export const ResultCard = ({ result, type, index = 0, language }) => {
                     {/* Download Icon Overlay */}
                     {((!isDisabled && !downloadProgress.progress && !downloadInitiated) || (type === 'tv' && !downloadProgress.progress && !downloadInitiated)) && (
                         <motion.div
-                            className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 flex items-center justify-center transition-all duration-300"
+                            className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center transition-all duration-300"
                             initial={{ opacity: 0 }}
                             whileHover={{ opacity: 1 }}
                         >

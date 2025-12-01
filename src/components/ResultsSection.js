@@ -1,5 +1,6 @@
 'use client'
 
+import { useBatchLibraryCheck } from '@/app/lib/useExistsInDb'
 import { Skeleton, Typography } from '@mui/material'
 import { motion } from 'framer-motion'
 import { ResultCard } from './ResultCard'
@@ -15,6 +16,8 @@ const containerVariants = {
 }
 
 export const ResultsSection = ({ title, results, type, className = '', loading = false, language }) => {
+    const { libraryStatus, loading: libraryLoading } = useBatchLibraryCheck(results, type)
+
     if (!results?.length && !loading) {
         return null
     }
@@ -64,6 +67,8 @@ export const ResultsSection = ({ title, results, type, className = '', loading =
                             type={type}
                             index={index}
                             language={language}
+                            libraryStatus={libraryStatus[result.id]}
+                            libraryLoading={libraryLoading}
                         />
                     ))
                 )}

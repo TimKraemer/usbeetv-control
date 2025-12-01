@@ -83,7 +83,7 @@ export const SearchBar = memo(({
             transition={{ duration: 0.5, ease: "easeOut" }}
             className="w-full max-w-2xl mx-auto px-4"
         >
-            <div className="flex items-center bg-white bg-opacity-5 rounded-lg border border-gray-600 overflow-hidden">
+            <div className="flex items-center bg-white/5 rounded-lg border border-gray-600 overflow-hidden">
                 {/* Search Input */}
                 <div className="flex-1">
                     <TextField
@@ -165,7 +165,7 @@ export const SearchBar = memo(({
                     <Button
                         variant="text"
                         onClick={handleMenuOpen}
-                        className="min-w-0 w-12 h-12 p-0 text-gray-300 hover:text-white hover:bg-white hover:bg-opacity-10 rounded-none"
+                        className="min-w-0 w-12 h-12 p-0 text-gray-300 hover:text-white hover:bg-white/10 rounded-none"
                         sx={{
                             borderRadius: 0,
                             '&:hover': {
