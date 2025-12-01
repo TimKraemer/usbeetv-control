@@ -9,8 +9,12 @@ RUN apt-get update && apt-get --yes install git
 FROM git AS deps
 WORKDIR /app
 
-# Install bun
-RUN curl -fsSL https://bun.sh/install | bash
+# Install curl, unzip and bun
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY package.json bun.lock* ./
@@ -24,8 +28,12 @@ RUN /root/.bun/bin/bun --version && \
 FROM git AS builder
 WORKDIR /app
 
-# Install bun for build
-RUN curl -fsSL https://bun.sh/install | bash
+# Install curl, unzip and bun for build
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY --from=deps /app/node_modules ./node_modules
@@ -36,6 +44,7 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
+ENV NEXT_PRIVATE_SKIP_TURBO=1
 RUN /root/.bun/bin/bun run build
 
 # Production image, copy all the files and run next
