@@ -43,9 +43,9 @@ COPY . .
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV NEXT_PRIVATE_SKIP_TURBO=1
 
-RUN /root/.bun/bin/bun run build
+# Disable Turbopack - set inline to ensure it's available during build
+RUN NEXT_PRIVATE_SKIP_TURBO=1 NEXT_TELEMETRY_DISABLED=1 node_modules/.bin/next build
 
 # Production image, copy all the files and run next
 FROM node:lts-bullseye-slim AS runner

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: "standalone",
+  turbopack: false,
   env: {
     NEXT_TELEMETRY_DISABLED: "true",
   },
