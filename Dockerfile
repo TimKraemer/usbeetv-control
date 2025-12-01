@@ -15,16 +15,18 @@ ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY package.json bun.lock* ./
 
-RUN \
-    if [ -f bun.lockb ] || [ -f bun.lock ]; then bun install --frozen-lockfile; \
-    else bun install; \
+RUN /root/.bun/bin/bun --version && \
+    if [ -f bun.lockb ] || [ -f bun.lock ]; then /root/.bun/bin/bun install --frozen-lockfile; \
+    else /root/.bun/bin/bun install; \
     fi
 
 # Rebuild the source code only when needed
 FROM git AS builder
 WORKDIR /app
 
-# RUN npm install -g yarn
+# Install bun for build
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:${PATH}"
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -34,7 +36,7 @@ COPY . .
 # Uncomment the following line in case you want to disable telemetry during the build.
 ENV NEXT_TELEMETRY_DISABLED 1
 
-RUN bun run build
+RUN /root/.bun/bin/bun run build
 
 # Production image, copy all the files and run next
 FROM node:lts-bullseye-slim AS runner
