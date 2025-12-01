@@ -13,11 +13,11 @@ WORKDIR /app
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
-COPY package.json bun.lockb* ./
+COPY package.json bun.lock* ./
 
 RUN \
-    if [ -f bun.lockb ]; then bun install --frozen-lockfile; \
-    else echo "Lockfile not found." && exit 1; \
+    if [ -f bun.lockb ] || [ -f bun.lock ]; then bun install --frozen-lockfile; \
+    else bun install; \
     fi
 
 # Rebuild the source code only when needed
