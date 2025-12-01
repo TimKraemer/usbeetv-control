@@ -66,10 +66,32 @@ export async function triggerLibraryScan() {
         }
         globalThis.__jellyfinScanCooldown.lastAt = now
 
-        // Trigger a scan of all libraries using the correct scheduled task endpoint
-        const result = await fetchFromJellyfin('/ScheduledTasks/Running/7738148ffcd07979c7ceb148e06b3aed', '', 'POST')
-        console.info('[INFO] Jellyfin library scan triggered successfully')
-        return result
+        // Get all library folders and filter for movies and tvshows only
+        const libraries = await getLibraryFolders()
+        const mediaLibraries = libraries.filter(
+            lib => lib.CollectionType === 'movies' || lib.CollectionType === 'tvshows'
+        )
+
+        if (mediaLibraries.length === 0) {
+            console.warn('[WARN] No movies or tvshows libraries found')
+            return { success: true, libraries: [] }
+        }
+
+        // Trigger refresh for each media library
+        const results = []
+        for (const library of mediaLibraries) {
+            try {
+                await fetchFromJellyfin(`/Items/${library.ItemId}/Refresh`, '?Recursive=true&MetadataRefreshMode=Default&ImageRefreshMode=Default', 'POST')
+                console.info(`[INFO] Triggered scan for library: ${library.Name} (${library.CollectionType})`)
+                results.push({ name: library.Name, type: library.CollectionType, success: true })
+            } catch (error) {
+                console.error(`[ERROR] Failed to scan library ${library.Name}:`, error.message)
+                results.push({ name: library.Name, type: library.CollectionType, success: false, error: error.message })
+            }
+        }
+
+        console.info('[INFO] Jellyfin library scan triggered successfully for movies and TV shows')
+        return { success: true, libraries: results }
     } catch (error) {
         console.error('[ERROR] Failed to trigger Jellyfin library scan:', error.message)
         throw error
