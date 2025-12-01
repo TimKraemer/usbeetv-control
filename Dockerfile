@@ -42,9 +42,9 @@ COPY . .
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
-ENV NEXT_TELEMETRY_DISABLED 1
-
+ENV NEXT_TELEMETRY_DISABLED=1
 ENV NEXT_PRIVATE_SKIP_TURBO=1
+
 RUN /root/.bun/bin/bun run build
 
 # Production image, copy all the files and run next
