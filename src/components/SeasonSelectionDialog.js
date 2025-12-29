@@ -51,11 +51,11 @@ export const SeasonSelectionDialog = ({
             setShowInfo(data.showInfo)
 
 
-            // Pre-select missing seasons that have torrents available
-            const missingSeasonsWithTorrents = data.seasons
+            // Pre-select only the next missing season that has a torrent available
+            const firstMissingSeason = data.seasons
                 .filter(season => season.isMissing && season.hasTorrent)
-                .map(season => season.seasonNumber)
-            setSelectedSeasons(missingSeasonsWithTorrents)
+                .map(season => season.seasonNumber)[0]
+            setSelectedSeasons(firstMissingSeason !== undefined ? [firstMissingSeason] : [])
         } catch (error) {
             console.error('Error fetching seasons:', error)
             setError(error.message)
@@ -118,6 +118,7 @@ export const SeasonSelectionDialog = ({
             if (onDownloadComplete) {
                 onDownloadComplete(data.results)
             }
+            onClose()
         } catch (error) {
             console.error('Error downloading seasons:', error)
             setError(error.message)
@@ -156,6 +157,7 @@ export const SeasonSelectionDialog = ({
             if (onDownloadComplete) {
                 onDownloadComplete(data.results)
             }
+            onClose()
         } catch (error) {
             console.error('Error downloading seasons:', error)
             setError(error.message)
@@ -214,7 +216,7 @@ export const SeasonSelectionDialog = ({
                 }}
             >
                 <DialogTitle className="text-white">
-                    <Typography variant="h6" className="text-white">
+                    <Typography component="span" variant="h6" className="text-white">
                         {showName} - Staffeln auswählen
                     </Typography>
                     {showInfo && (
@@ -241,7 +243,7 @@ export const SeasonSelectionDialog = ({
                         <>
                             {missingSeasons.length > 0 && (
                                 <Alert severity="info" className="mb-4">
-                                    {missingSeasons.length} Staffel{missingSeasons.length !== 1 ? 'n' : ''} fehlt in der Bibliothek und wurde vorausgewählt.
+                                    {missingSeasons.length} Staffel{missingSeasons.length !== 1 ? 'n' : ''} fehlt in der Bibliothek. Die nächste fehlende Staffel wurde vorausgewählt.
                                 </Alert>
                             )}
 
@@ -312,7 +314,7 @@ export const SeasonSelectionDialog = ({
 
                 <DialogActions className="p-4">
                     <Button onClick={onClose} className="text-white">
-                        Abbrechen
+                        Schließen
                     </Button>
                     <Button
                         onClick={handleDownload}

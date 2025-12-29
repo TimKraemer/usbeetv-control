@@ -2,6 +2,7 @@
 
 import { CircularProgress, Typography } from '@mui/material'
 import { motion } from 'framer-motion'
+import { useMemo } from 'react'
 import { ResultsSection } from './ResultsSection'
 
 export const SearchResults = ({
@@ -42,20 +43,23 @@ export const SearchResults = ({
         )
     }
 
-    // Always extract the .results array from the API response
-    const movieResultsArray = movieResults?.results || []
-    const tvResultsArray = tvResults?.results || []
-
     // Helper to extract year for sorting
-    function getYear(result, type) {
+    const getYear = (result, type) => {
         const dateString = type === 'movie' ? result.release_date : result.first_air_date
         if (!dateString) return 0
         return new Date(dateString).getFullYear()
     }
 
-    // Sort results by year descending
-    const sortedMovieResults = [...movieResultsArray].sort((a, b) => getYear(b, 'movie') - getYear(a, 'movie'))
-    const sortedTvResults = [...tvResultsArray].sort((a, b) => getYear(b, 'tv') - getYear(a, 'tv'))
+    // Sort results by year descending - memoized to prevent unnecessary re-renders and API calls
+    const sortedMovieResults = useMemo(() => {
+        const results = movieResults?.results || []
+        return [...results].sort((a, b) => getYear(b, 'movie') - getYear(a, 'movie'))
+    }, [movieResults?.results])
+    
+    const sortedTvResults = useMemo(() => {
+        const results = tvResults?.results || []
+        return [...results].sort((a, b) => getYear(b, 'tv') - getYear(a, 'tv'))
+    }, [tvResults?.results])
 
     return (
         <motion.div

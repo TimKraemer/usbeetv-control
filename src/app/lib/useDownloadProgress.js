@@ -13,10 +13,31 @@ export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title
         // Register this download with the global state
         startDownload(torrentId, tmdbId, type, title)
 
+        const abortController = new AbortController()
+        let intervalId = null
+
         const fetchDownloadProgress = async () => {
             try {
-                const response = await fetch(`/api/progress?torrentId=${torrentId}`)
+                const response = await fetch(`/api/progress?torrentId=${torrentId}`, {
+                    signal: abortController.signal
+                })
+                
+                // If torrent not found or error, stop polling
+                if (!response.ok) {
+                    if (intervalId) clearInterval(intervalId)
+                    stopDownload(torrentId)
+                    return
+                }
+                
                 const data = await response.json()
+                
+                // If torrent was removed/cancelled, stop polling
+                if (data.error || data.notFound) {
+                    if (intervalId) clearInterval(intervalId)
+                    stopDownload(torrentId)
+                    return
+                }
+                
                 const newProgress = {
                     progress: Math.round(data.progress),
                     eta: data.eta,
@@ -37,20 +58,24 @@ export const useDownloadProgress = (torrentId, tmdbId = null, type = null, title
                     }, 10000) // 10 second delay to show completion status
                 }
             } catch (error) {
+                // Ignore abort errors
+                if (error.name === 'AbortError') return
+                
                 console.error("Error fetching download progress:", error)
+                // On error, stop polling to prevent endless failed requests
+                if (intervalId) clearInterval(intervalId)
             }
         }
 
-        let intervalId = null
-
         const startPolling = () => {
             fetchDownloadProgress()
-            intervalId = setInterval(fetchDownloadProgress, 5000)
+            intervalId = setInterval(fetchDownloadProgress, 2000)
         }
 
         startPolling()
 
         return () => {
+            abortController.abort()
             if (intervalId) clearInterval(intervalId)
         }
     }, [torrentId, tmdbId, type, title, startDownload, updateDownloadProgress, stopDownload])

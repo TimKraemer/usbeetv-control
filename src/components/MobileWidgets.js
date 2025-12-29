@@ -2,40 +2,39 @@
 
 import { LibraryScanButton } from '@/components/LibraryScanButton'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-import { API_ENDPOINTS } from '@/constants/app'
-import { formatCurrency, formatDate } from '@/utils/formatters'
+// PayPal pool imports disabled for now (widget hidden)
+// import { API_ENDPOINTS } from '@/constants/app'
+// import { formatCurrency, formatDate } from '@/utils/formatters'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
 import { Box, IconButton, Typography } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
-import Image from 'next/image'
-import { useEffect, useState } from 'react'
+// import Image from 'next/image' // PayPal widget hidden
+import { useEffect } from 'react'
 
 export const MobileWidgets = ({
     diskInfo,
-    poolInfo,
+    // poolInfo, // PayPal widget hidden
     hasSearchResults = false,
     isCollapsed = false,
     onCollapsedChange,
 }) => {
-    const [paypalPoolUrl, setPaypalPoolUrl] = useState(null)
-
-    // Fetch PayPal pool URL on component mount
-    useEffect(() => {
-        const fetchPaypalPoolUrl = async () => {
-            try {
-                const response = await fetch(API_ENDPOINTS.PAYPAL_POOL_URL)
-                if (response.ok) {
-                    const data = await response.json()
-                    setPaypalPoolUrl(data.url)
-                }
-            } catch (error) {
-                console.error('Failed to fetch PayPal pool URL:', error)
-            }
-        }
-
-        fetchPaypalPoolUrl()
-    }, [])
+    // PayPal pool URL fetching disabled for now (widget hidden)
+    // const [paypalPoolUrl, setPaypalPoolUrl] = useState(null)
+    // useEffect(() => {
+    //     const fetchPaypalPoolUrl = async () => {
+    //         try {
+    //             const response = await fetch(API_ENDPOINTS.PAYPAL_POOL_URL)
+    //             if (response.ok) {
+    //                 const data = await response.json()
+    //                 setPaypalPoolUrl(data.url)
+    //             }
+    //         } catch (error) {
+    //             console.error('Failed to fetch PayPal pool URL:', error)
+    //         }
+    //     }
+    //     fetchPaypalPoolUrl()
+    // }, [])
 
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
@@ -43,10 +42,10 @@ export const MobileWidgets = ({
         : 0
     const isLowSpace = usePercent > 80
 
-    // Defensive: Only calculate if both are numbers
-    const progressPercent = (typeof poolInfo?.currentAmount === 'number' && typeof poolInfo?.targetAmount === 'number' && poolInfo.targetAmount > 0)
-        ? (poolInfo.currentAmount / poolInfo.targetAmount) * 100
-        : 0
+    // PayPal pool progress calculation disabled for now (widget hidden)
+    // const progressPercent = (typeof poolInfo?.currentAmount === 'number' && typeof poolInfo?.targetAmount === 'number' && poolInfo.targetAmount > 0)
+    //     ? (poolInfo.currentAmount / poolInfo.targetAmount) * 100
+    //     : 0
 
     // Auto-collapse when search has results
     useEffect(() => {
@@ -57,13 +56,14 @@ export const MobileWidgets = ({
         }
     }, [hasSearchResults, onCollapsedChange])
 
-    const handlePayPalClick = () => {
-        if (isCollapsed) {
-            onCollapsedChange?.(false)
-        } else if (paypalPoolUrl && paypalPoolUrl !== "__PAYPAL_POOL_URL_NOT_SET__") {
-            window.open(paypalPoolUrl, '_blank')
-        }
-    }
+    // PayPal click handler disabled for now (widget hidden)
+    // const handlePayPalClick = () => {
+    //     if (isCollapsed) {
+    //         onCollapsedChange?.(false)
+    //     } else if (paypalPoolUrl && paypalPoolUrl !== "__PAYPAL_POOL_URL_NOT_SET__") {
+    //         window.open(paypalPoolUrl, '_blank')
+    //     }
+    // }
 
     const handleDiskClick = () => {
         onCollapsedChange?.(!isCollapsed)

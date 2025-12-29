@@ -49,15 +49,20 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
         }
     }, [existsInDb, libraryLoading])
 
-    // Check if this item has an active download on mount
+    // Sync torrentId with active downloads - set when active, clear when removed
     useEffect(() => {
         const activeDownload = activeDownloads.find(d => d.tmdbId === result.id && d.type === type)
         if (activeDownload) {
             setTorrentId(activeDownload.torrentId)
             setDownloadStarted(true)
             setDownloadInitiated(false) // Don't show "Starte Download" since it's already started
+        } else if (torrentId) {
+            // Download was removed (cancelled or completed) - clear the torrentId to stop polling
+            setTorrentId(null)
+            setDownloadStarted(false)
+            setDownloadInitiated(false)
         }
-    }, [activeDownloads, result.id, type])
+    }, [activeDownloads, result.id, type, torrentId])
 
     const downloadProgress = useDownloadProgress(torrentId, result.id, type, title)
 
@@ -369,79 +374,80 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
                         )}
                     </Box>
 
-                    {/* Download Progress Overlay - Shows immediately when download is initiated */}
-                    {(downloadInitiated || (torrentId && downloadProgress.progress >= 0)) && !downloadProgress.isComplete && (
-                        <motion.div
-                            className="absolute inset-0 bg-black/50 flex items-center justify-center"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            <Box className="text-center relative">
-                                {downloadProgress.progress > 0 ? (
-                                    <>
-                                        <CircularProgressWithLabel
-                                            value={downloadProgress.progress}
-                                            className="text-white"
-                                        />
-                                        <Typography variant="caption" className="text-white block mt-2">
-                                            ETA: {formatEta(downloadProgress.eta)}
-                                        </Typography>
-                                    </>
-                                ) : (
-                                    <>
-                                        <CircularProgress size={48} className="text-blue-500 mb-2" />
-                                        <Typography variant="body2" className="text-white font-medium">
-                                            {downloadInitiated ? 'Starte Download...' : 'Warte auf Status...'}
-                                        </Typography>
-                                    </>
-                                )}
-                                <Tooltip title="Download abbrechen">
-                                    <IconButton
-                                        onClick={handleCancelDownload}
-                                        disabled={cancelling}
-                                        size="small"
-                                        className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black/50"
-                                    >
-                                        {cancelling ? (
-                                            <CircularProgress size={16} className="text-red-300" />
-                                        ) : (
-                                            <CancelIcon />
-                                        )}
-                                    </IconButton>
-                                </Tooltip>
-                            </Box>
-                        </motion.div>
-                    )}
-
-                    {/* Download Complete Overlay */}
-                    {downloadProgress.isComplete && (
-                        <motion.div
-                            className="absolute inset-0 bg-green-600/80 flex items-center justify-center"
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                        >
-                            <Box className="text-center">
-                                <CheckCircleIcon className="text-white text-6xl mb-2" />
-                                <Typography variant="body2" className="text-white font-medium">
-                                    Download abgeschlossen
-                                </Typography>
-                            </Box>
-                        </motion.div>
-                    )}
-
-                    {/* Download Icon Overlay */}
-                    {((!isDisabled && !downloadProgress.progress && !downloadInitiated) || (type === 'tv' && !downloadProgress.progress && !downloadInitiated)) && (
-                        <motion.div
-                            className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center transition-all duration-300"
-                            initial={{ opacity: 0 }}
-                            whileHover={{ opacity: 1 }}
-                        >
-                            <DownloadIcon className="text-white text-4xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                        </motion.div>
-                    )}
                 </CardActionArea>
+
+                {/* Download Progress Overlay - Shows immediately when download is initiated */}
+                {(downloadInitiated || (torrentId && downloadProgress.progress >= 0)) && !downloadProgress.isComplete && (
+                    <motion.div
+                        className="absolute inset-0 bg-black/50 flex items-center justify-center pointer-events-none"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <Box className="text-center relative">
+                            {downloadProgress.progress > 0 ? (
+                                <>
+                                    <CircularProgressWithLabel
+                                        value={downloadProgress.progress}
+                                        className="text-white"
+                                    />
+                                    <Typography variant="caption" className="text-white block mt-2">
+                                        ETA: {formatEta(downloadProgress.eta)}
+                                    </Typography>
+                                </>
+                            ) : (
+                                <>
+                                    <CircularProgress size={48} className="text-blue-500 mb-2" />
+                                    <Typography variant="body2" className="text-white font-medium">
+                                        {downloadInitiated ? 'Starte Download...' : 'Warte auf Status...'}
+                                    </Typography>
+                                </>
+                            )}
+                            <Tooltip title="Download abbrechen">
+                                <IconButton
+                                    onClick={handleCancelDownload}
+                                    disabled={cancelling}
+                                    size="small"
+                                    className="absolute -top-2 -right-2 text-red-300 hover:text-red-100 bg-black/50 pointer-events-auto"
+                                >
+                                    {cancelling ? (
+                                        <CircularProgress size={16} className="text-red-300" />
+                                    ) : (
+                                        <CancelIcon />
+                                    )}
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                    </motion.div>
+                )}
+
+                {/* Download Complete Overlay */}
+                {downloadProgress.isComplete && (
+                    <motion.div
+                        className="absolute inset-0 bg-green-600/80 flex items-center justify-center pointer-events-none"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ duration: 0.3 }}
+                    >
+                        <Box className="text-center">
+                            <CheckCircleIcon className="text-white text-6xl mb-2" />
+                            <Typography variant="body2" className="text-white font-medium">
+                                Download abgeschlossen
+                            </Typography>
+                        </Box>
+                    </motion.div>
+                )}
+
+                {/* Download Icon Overlay */}
+                {((!isDisabled && !downloadProgress.progress && !downloadInitiated) || (type === 'tv' && !downloadProgress.progress && !downloadInitiated)) && (
+                    <motion.div
+                        className="absolute inset-0 bg-black/0 hover:bg-black/30 flex items-center justify-center transition-all duration-300 pointer-events-none"
+                        initial={{ opacity: 0 }}
+                        whileHover={{ opacity: 1 }}
+                    >
+                        <DownloadIcon className="text-white text-4xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                    </motion.div>
+                )}
             </MotionCard>
         </>
     )

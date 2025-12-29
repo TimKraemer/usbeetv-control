@@ -15,6 +15,11 @@ async function getTorrentProgress(sessionId, torrentId) {
     const result = await response.json()
     if (result.error) throw new Error(`Error fetching torrent status: ${result.error}`)
 
+    // Check if torrent exists - Deluge returns empty object for non-existent torrents
+    if (!result.result || Object.keys(result.result).length === 0) {
+        return { notFound: true }
+    }
+
     return {
         progress: result.result.progress,
         eta: result.result.eta,
@@ -32,7 +37,14 @@ export async function GET(request) {
 
     try {
         const sessionId = await authenticateDeluge()
-        const { progress, eta, state } = await getTorrentProgress(sessionId, torrentId)
+        const result = await getTorrentProgress(sessionId, torrentId)
+
+        // If torrent was not found (cancelled/removed), return 404
+        if (result.notFound) {
+            return NextResponse.json({ notFound: true }, { status: 404 })
+        }
+
+        const { progress, eta, state } = result
 
         // Check if download is complete (progress = 1.0 and state indicates completion)
         const isComplete = progress >= 1.0 && (state === 'Seeding' || state === 'Paused')

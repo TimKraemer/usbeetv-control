@@ -5,9 +5,9 @@ import { MobileWidgets } from './MobileWidgets'
 
 export const MobileWidgetsContainer = ({ onCollapsedChange }) => {
     const [diskInfo, setDiskInfo] = useState(null)
-    const [poolInfo, setPoolInfo] = useState(null)
+    // const [poolInfo, setPoolInfo] = useState(null) // PayPal widget hidden
     const [diskError, setDiskError] = useState(null)
-    const [poolError, setPoolError] = useState(null)
+    // const [poolError, setPoolError] = useState(null) // PayPal widget hidden
     const [hasSearchResults, setHasSearchResults] = useState(false)
     const [isCollapsed, setIsCollapsed] = useState(false)
 
@@ -59,42 +59,37 @@ export const MobileWidgetsContainer = ({ onCollapsedChange }) => {
             }
         }
 
-        // Fetch PayPal pool data
-        const fetchPoolStatus = async () => {
-            try {
-                const response = await fetch('/api/paypal-pool-status')
-                if (!response.ok) {
-                    throw new Error('Failed to fetch pool status')
-                }
-                const data = await response.json()
-                setPoolInfo(data)
-                setPoolError(null)
-            } catch (error) {
-                console.error('Error fetching pool status:', error)
-                setPoolError('Failed to load pool status')
-            }
-        }
+        // PayPal pool fetching disabled for now (widget hidden)
+        // const fetchPoolStatus = async () => {
+        //     try {
+        //         const response = await fetch('/api/paypal-pool-status')
+        //         if (!response.ok) {
+        //             throw new Error('Failed to fetch pool status')
+        //         }
+        //         const data = await response.json()
+        //         setPoolInfo(data)
+        //         setPoolError(null)
+        //     } catch (error) {
+        //         console.error('Error fetching pool status:', error)
+        //         setPoolError('Failed to load pool status')
+        //     }
+        // }
 
-        // Fetch both data
+        // Fetch disk space data
         fetchDiskSpace()
-        fetchPoolStatus()
 
         // Set up polling for disk space (every 30 seconds)
         const diskInterval = setInterval(fetchDiskSpace, 30000)
 
-        // Set up polling for pool status (every 5 minutes)
-        const poolInterval = setInterval(fetchPoolStatus, 300000)
-
         return () => {
             clearInterval(diskInterval)
-            clearInterval(poolInterval)
         }
     }, [])
 
     return (
         <MobileWidgets
             diskInfo={diskInfo}
-            poolInfo={poolInfo}
+            // poolInfo={poolInfo} // PayPal widget hidden
             hasSearchResults={hasSearchResults}
             isCollapsed={isCollapsed}
             onCollapsedChange={setIsCollapsed}

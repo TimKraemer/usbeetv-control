@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useState } from 'react'
 
 const DownloadStateContext = createContext()
 
@@ -10,7 +10,7 @@ export const DownloadStateProvider = ({ children }) => {
 
     // No persistence: each session starts clean
 
-    const startDownload = (torrentId = null, tmdbId = null, type = null, title = null) => {
+    const startDownload = useCallback((torrentId = null, tmdbId = null, type = null, title = null) => {
         setHasActiveDownloads(true)
         if (torrentId) {
             setActiveDownloads(prev => {
@@ -28,9 +28,9 @@ export const DownloadStateProvider = ({ children }) => {
                 }]
             })
         }
-    }
+    }, [])
 
-    const updateDownloadProgress = (torrentId, progress, eta, state) => {
+    const updateDownloadProgress = useCallback((torrentId, progress, eta, state) => {
         setActiveDownloads(prev =>
             prev.map(d =>
                 d.torrentId === torrentId
@@ -38,9 +38,22 @@ export const DownloadStateProvider = ({ children }) => {
                     : d
             )
         )
-    }
+    }, [])
 
-    const cancelDownload = async (torrentId) => {
+    const stopDownload = useCallback((torrentId = null) => {
+        if (torrentId) {
+            setActiveDownloads(prev => {
+                const remaining = prev.filter(d => d.torrentId !== torrentId)
+                setHasActiveDownloads(remaining.length > 0)
+                return remaining
+            })
+        } else {
+            setHasActiveDownloads(false)
+            setActiveDownloads([])
+        }
+    }, [])
+
+    const cancelDownload = useCallback(async (torrentId) => {
         try {
             const response = await fetch('/api/download/cancel', {
                 method: 'POST',
@@ -61,25 +74,12 @@ export const DownloadStateProvider = ({ children }) => {
             console.error('Error cancelling download:', error)
             return { success: false, error: error.message }
         }
-    }
+    }, [stopDownload])
 
-    const stopDownload = (torrentId = null) => {
-        if (torrentId) {
-            setActiveDownloads(prev => prev.filter(d => d.torrentId !== torrentId))
-            setHasActiveDownloads(prev => {
-                const remaining = activeDownloads.filter(d => d.torrentId !== torrentId)
-                return remaining.length > 0
-            })
-        } else {
-            setHasActiveDownloads(false)
-            setActiveDownloads([])
-        }
-    }
-
-    const clearCompletedDownloads = () => {
+    const clearCompletedDownloads = useCallback(() => {
         setActiveDownloads([])
         setHasActiveDownloads(false)
-    }
+    }, [])
 
     return (
         <DownloadStateContext.Provider value={{
