@@ -112,7 +112,7 @@ export const MobileWidgets = ({
                             </div>
                         </motion.div>
 
-                        {/* PayPal Pool Widget - Collapsed */}
+                        {/* PayPal Pool Widget - Collapsed (hidden for now)
                         <motion.div
                             className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
                             initial={{ scale: 0.8, opacity: 0 }}
@@ -145,6 +145,7 @@ export const MobileWidgets = ({
                                 </Typography>
                             </div>
                         </motion.div>
+                        */}
                     </div>
                 ) : (
                     // Uncollapsed state - full widgets
@@ -205,7 +206,7 @@ export const MobileWidgets = ({
                             </Box>
                         </motion.div>
 
-                        {/* PayPal Pool Widget - Uncollapsed */}
+                        {/* PayPal Pool Widget - Uncollapsed (hidden for now)
                         <motion.div
                             className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0 cursor-pointer"
                             initial={{ scale: 0.8, opacity: 0 }}
@@ -276,6 +277,7 @@ export const MobileWidgets = ({
                                 </Typography>
                             </Box>
                         </motion.div>
+                        */}
                     </div>
                 )}
             </motion.div>
