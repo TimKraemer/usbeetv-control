@@ -37,10 +37,18 @@ export const SeasonSelectionDialog = ({
     const [downloadResults, setDownloadResults] = useState([])
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
+    const [showSlowServerWarning, setShowSlowServerWarning] = useState(false)
 
     const fetchSeasons = useCallback(async () => {
         setLoading(true)
         setError(null)
+        setShowSlowServerWarning(false)
+
+        // Show warning after 5 seconds if still loading
+        const slowServerTimer = setTimeout(() => {
+            setShowSlowServerWarning(true)
+        }, 5000)
+
         try {
             const response = await fetch(`/api/download/seasons?tmdbId=${tmdbId}&language=${language}`)
             if (!response.ok) {
@@ -60,7 +68,9 @@ export const SeasonSelectionDialog = ({
             console.error('Error fetching seasons:', error)
             setError(error.message)
         } finally {
+            clearTimeout(slowServerTimer)
             setLoading(false)
+            setShowSlowServerWarning(false)
         }
     }, [tmdbId, language])
 
@@ -228,8 +238,13 @@ export const SeasonSelectionDialog = ({
 
                 <DialogContent>
                     {loading && (
-                        <Box className="flex justify-center items-center py-8">
+                        <Box className="flex flex-col justify-center items-center py-8 gap-4">
                             <CircularProgress />
+                            {showSlowServerWarning && (
+                                <Alert severity="info" className="mt-4">
+                                    Der Torrent-Server scheint gerade überlastet zu sein. Das kann 2-3 Minuten dauern, bitte warten...
+                                </Alert>
+                            )}
                         </Box>
                     )}
 

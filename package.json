@@ -15,16 +15,17 @@
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.3.6",
-    "@mui/material": "^7.3.6",
-    "@mui/material-nextjs": "^7.3.6",
+    "@mui/icons-material": "^7.3.7",
+    "@mui/material": "^7.3.7",
+    "@mui/material-nextjs": "^7.3.7",
     "dotenv": "^17.2.3",
-    "framer-motion": "^12.23.26",
-    "next": "16.1.1",
+    "framer-motion": "^12.29.0",
+    "next": "16.1.4",
     "node-fetch": "^3.3.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-flagkit": "^2.0.4"
+    "react-flagkit": "^2.0.4",
+    "undici": "^7.19.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",

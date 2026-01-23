@@ -1,4 +1,12 @@
 import { NextResponse } from 'next/server'
+import { Agent } from 'undici'
+
+// Custom agent with extended connect timeout for slow torrent server
+const slowServerAgent = new Agent({
+    connect: {
+        timeout: 120000 // 2 minutes connect timeout
+    }
+})
 
 const tagScores = {
     'DL': 1, 'ML': 1,
@@ -9,6 +17,8 @@ const tagScores = {
 }
 
 const blacklist = ['.TS.', 'telesync', ".CAM"]
+
+const TORRENT_API_TIMEOUT = 120000 // 2 minutes timeout for slow torrent server
 
 function rankRow(row) {
     let score = 0
@@ -157,13 +167,19 @@ export async function GET(request) {
 
         // Get available torrents for each season
         const categories = '55,57'
-        let response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`)
+        let response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`, { 
+            signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
+            dispatcher: slowServerAgent
+        })
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         let data = await response.json()
         if (data.count === 0) {
             // Retry without release_type filter
-            response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
+            response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`, { 
+                signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
+                dispatcher: slowServerAgent
+            })
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
             data = await response.json()
         }
