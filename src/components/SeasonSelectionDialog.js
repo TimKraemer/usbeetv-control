@@ -38,6 +38,7 @@ export const SeasonSelectionDialog = ({
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
     const [showSlowServerWarning, setShowSlowServerWarning] = useState(false)
+    const [showSlowDownloadWarning, setShowSlowDownloadWarning] = useState(false)
 
     const fetchSeasons = useCallback(async () => {
         setLoading(true)
@@ -94,6 +95,12 @@ export const SeasonSelectionDialog = ({
         setDownloading(true)
         setDownloadResults([])
         setLanguageWarning(null)
+        setShowSlowDownloadWarning(false)
+
+        // Show warning after 5 seconds if still downloading
+        const slowDownloadTimer = setTimeout(() => {
+            setShowSlowDownloadWarning(true)
+        }, 5000)
 
         try {
             const response = await fetch('/api/download/seasons/download', {
@@ -133,13 +140,21 @@ export const SeasonSelectionDialog = ({
             console.error('Error downloading seasons:', error)
             setError(error.message)
         } finally {
+            clearTimeout(slowDownloadTimer)
             setDownloading(false)
+            setShowSlowDownloadWarning(false)
         }
     }
 
     const handleLanguageConfirm = async () => {
         setShowLanguageDialog(false)
         setDownloading(true)
+        setShowSlowDownloadWarning(false)
+
+        // Show warning after 5 seconds if still downloading
+        const slowDownloadTimer = setTimeout(() => {
+            setShowSlowDownloadWarning(true)
+        }, 5000)
 
         try {
             const response = await fetch('/api/download/seasons/download', {
@@ -172,7 +187,9 @@ export const SeasonSelectionDialog = ({
             console.error('Error downloading seasons:', error)
             setError(error.message)
         } finally {
+            clearTimeout(slowDownloadTimer)
             setDownloading(false)
+            setShowSlowDownloadWarning(false)
         }
     }
 
@@ -242,7 +259,7 @@ export const SeasonSelectionDialog = ({
                             <CircularProgress />
                             {showSlowServerWarning && (
                                 <Alert severity="info" className="mt-4">
-                                    Der Torrent-Server scheint gerade überlastet zu sein. Das kann 2-3 Minuten dauern, bitte warten...
+                                    Der Torrent-Server scheint gerade überlastet zu sein. Es werden automatisch bis zu 3 Versuche unternommen (je 1 Minute Timeout)...
                                 </Alert>
                             )}
                         </Box>
@@ -327,25 +344,32 @@ export const SeasonSelectionDialog = ({
                     )}
                 </DialogContent>
 
-                <DialogActions className="p-4">
-                    <Button onClick={onClose} className="text-white">
-                        Schließen
-                    </Button>
-                    <Button
-                        onClick={handleDownload}
-                        disabled={selectedSeasons.length === 0 || downloading}
-                        variant="contained"
-                        className="bg-blue-600 hover:bg-blue-700"
-                    >
-                        {downloading ? (
-                            <>
-                                <CircularProgress size={16} className="mr-2" />
-                                Lade herunter...
-                            </>
-                        ) : (
-                            `${selectedSeasons.length} Staffel${selectedSeasons.length !== 1 ? 'n' : ''} laden`
-                        )}
-                    </Button>
+                <DialogActions className="p-4 flex-col items-stretch gap-2">
+                    {showSlowDownloadWarning && downloading && (
+                        <Alert severity="info" className="w-full">
+                            Der Torrent-Server scheint gerade überlastet zu sein. Es werden automatisch bis zu 3 Versuche unternommen (je 1 Minute Timeout)...
+                        </Alert>
+                    )}
+                    <Box className="flex justify-end gap-2">
+                        <Button onClick={onClose} className="text-white">
+                            Schließen
+                        </Button>
+                        <Button
+                            onClick={handleDownload}
+                            disabled={selectedSeasons.length === 0 || downloading}
+                            variant="contained"
+                            className="bg-blue-600 hover:bg-blue-700"
+                        >
+                            {downloading ? (
+                                <>
+                                    <CircularProgress size={16} className="mr-2" />
+                                    Lade herunter...
+                                </>
+                            ) : (
+                                `${selectedSeasons.length} Staffel${selectedSeasons.length !== 1 ? 'n' : ''} laden`
+                            )}
+                        </Button>
+                    </Box>
                 </DialogActions>
             </Dialog>
 

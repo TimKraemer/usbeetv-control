@@ -4,9 +4,36 @@ import { Agent } from 'undici'
 // Custom agent with extended connect timeout for slow torrent server
 const slowServerAgent = new Agent({
     connect: {
-        timeout: 120000 // 2 minutes connect timeout
+        timeout: 60000 // 1 minute connect timeout per attempt
     }
 })
+
+const TORRENT_API_TIMEOUT = 60000 // 1 minute timeout per attempt
+const MAX_RETRIES = 3
+
+// Fetch with automatic retry logic
+async function fetchWithRetry(url, options = {}) {
+    let lastError
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(`[Torrent API] Attempt ${attempt}/${MAX_RETRIES}...`)
+            const response = await fetch(url, {
+                ...options,
+                signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
+                dispatcher: slowServerAgent
+            })
+            return response
+        } catch (error) {
+            lastError = error
+            console.log(`[Torrent API] Attempt ${attempt} failed: ${error.message}`)
+            if (attempt < MAX_RETRIES) {
+                console.log(`[Torrent API] Retrying in 2 seconds...`)
+                await new Promise(resolve => setTimeout(resolve, 2000))
+            }
+        }
+    }
+    throw lastError
+}
 
 const tagScores = {
     'DL': 1, 'ML': 1,
@@ -17,8 +44,6 @@ const tagScores = {
 }
 
 const blacklist = ['.TS.', 'telesync', ".CAM"]
-
-const TORRENT_API_TIMEOUT = 120000 // 2 minutes timeout for slow torrent server
 
 function rankRow(row) {
     let score = 0
@@ -167,19 +192,13 @@ export async function GET(request) {
 
         // Get available torrents for each season
         const categories = '55,57'
-        let response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`, { 
-            signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
-            dispatcher: slowServerAgent
-        })
+        let response = await fetchWithRetry(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`)
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
 
         let data = await response.json()
         if (data.count === 0) {
             // Retry without release_type filter
-            response = await fetch(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`, { 
-                signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
-                dispatcher: slowServerAgent
-            })
+            response = await fetchWithRetry(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
             data = await response.json()
         }
