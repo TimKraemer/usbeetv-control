@@ -17,7 +17,7 @@ export async function connectToWebUI(sessionId) {
         const hostsResult = await hostsResponse.json()
         const hosts = hostsResult.result
 
-        if (hosts.length === 0) {
+        if (!hosts || hosts.length === 0) {
             throw new Error('No available hosts to connect to Deluge')
         }
 
