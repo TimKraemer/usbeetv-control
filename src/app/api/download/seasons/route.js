@@ -1,60 +1,11 @@
+import {
+    fetchTorrentsByTmdbId,
+    isSeasonPack,
+    parseSeasonEpisode,
+    rankTorrent,
+    sortTorrents,
+} from '@/app/lib/tsApi'
 import { NextResponse } from 'next/server'
-import { Agent } from 'undici'
-
-// Custom agent with extended connect timeout for slow torrent server
-const slowServerAgent = new Agent({
-    connect: {
-        timeout: 60000 // 1 minute connect timeout per attempt
-    }
-})
-
-const TORRENT_API_TIMEOUT = 60000 // 1 minute timeout per attempt
-const MAX_RETRIES = 3
-
-// Fetch with automatic retry logic
-async function fetchWithRetry(url, options = {}) {
-    let lastError
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-        try {
-            console.log(`[Torrent API] Attempt ${attempt}/${MAX_RETRIES}...`)
-            const response = await fetch(url, {
-                ...options,
-                signal: AbortSignal.timeout(TORRENT_API_TIMEOUT),
-                dispatcher: slowServerAgent
-            })
-            return response
-        } catch (error) {
-            lastError = error
-            console.log(`[Torrent API] Attempt ${attempt} failed: ${error.message}`)
-            if (attempt < MAX_RETRIES) {
-                console.log(`[Torrent API] Retrying in 2 seconds...`)
-                await new Promise(resolve => setTimeout(resolve, 2000))
-            }
-        }
-    }
-    throw lastError
-}
-
-const tagScores = {
-    'DL': 1, 'ML': 1,
-    'HEVC': 1,
-    'HDR10': 1, 'HDR10+': 1,
-    'DTS': 1, 'DTSHD': 1, 'DTSHR': 1,
-    'Dolby Vision': 1,
-}
-
-const blacklist = ['.TS.', 'telesync', ".CAM"]
-
-function rankRow(row) {
-    let score = 0
-    for (const tag of row.tags) {
-        score += tagScores[tag] || 0
-    }
-    if (row.name.includes('BluRay') || row.name.includes('BDRiP')) {
-        score += 1
-    }
-    return score
-}
 
 const JELLYFIN_TIMEOUT_MS = 5000
 const TMDB_TIMEOUT_MS = 4000
@@ -187,6 +138,7 @@ export async function GET(request) {
         const isEnded = tvShowDetails.status === 'Ended'
         const totalSeasons = tvShowDetails.number_of_seasons
         const allSeasons = tvShowDetails.seasons || []
+        const originalLanguage = tvShowDetails.original_language || null
 
         // Get library status
         const seriesData = await fetchFromJellyfin('/Items', '?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds')
@@ -213,34 +165,30 @@ export async function GET(request) {
                 .map(season => season.season_number)
         }
 
-        // Get available torrents for each season
-        const categories = '55,57'
-        let response = await fetchWithRetry(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}&release_type=Scene,P2P`)
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+        // Get available torrents via TS APIv2
+        const rows = await fetchTorrentsByTmdbId(tmdbId, 'series')
+        const sortedRows = sortTorrents(rows, { userLanguage: language, originalLanguage })
 
-        let data = await response.json()
-        if (data.count === 0) {
-            // Retry without release_type filter
-            response = await fetchWithRetry(`${process.env.TS_API_URL}/browse.php?tmdbId=${tmdbId}&apikey=${process.env.TS_API_KEY}&cats=${categories}`)
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
-            data = await response.json()
-        }
+        // Group torrents by season: full-season packs on one hand,
+        // individual episode releases on the other
+        const seasonPackMap = new Map()
+        const episodeMap = new Map() // season -> Map(episode -> row)
+        for (const row of sortedRows) {
+            const parsed = parseSeasonEpisode(row.name)
+            if (!parsed) continue
 
-        const filteredRows = data.rows.filter(row =>
-            row.trumped === 0 &&
-            row.seeders !== 0 &&
-            !blacklist.some(term => row.name.toLowerCase().includes(term.toLowerCase()))
-        )
-        filteredRows.sort((a, b) => rankRow(b) - rankRow(a) || a.added - b.added)
-
-        // Group torrents by season
-        const seasonMap = new Map()
-        for (const row of filteredRows) {
-            const seasonMatch = row.name.match(/S(\d{2})/)
-            if (seasonMatch) {
-                const seasonNumber = Number.parseInt(seasonMatch[1])
-                if (!seasonMap.has(seasonNumber) || rankRow(row) > rankRow(seasonMap.get(seasonNumber))) {
-                    seasonMap.set(seasonNumber, row)
+            if (parsed.episode === null) {
+                if (!isSeasonPack(row)) continue
+                const existing = seasonPackMap.get(parsed.season)
+                if (!existing || rankTorrent(row) > rankTorrent(existing)) {
+                    seasonPackMap.set(parsed.season, row)
+                }
+            } else {
+                if (!episodeMap.has(parsed.season)) episodeMap.set(parsed.season, new Map())
+                const episodes = episodeMap.get(parsed.season)
+                const existing = episodes.get(parsed.episode)
+                if (!existing || rankTorrent(row) > rankTorrent(existing)) {
+                    episodes.set(parsed.episode, row)
                 }
             }
         }
@@ -250,9 +198,10 @@ export async function GET(request) {
         for (const season of allSeasons) {
             if (season.season_number > 0 && season.episode_count > 0) {
                 const seasonNumber = season.season_number
-                const torrentRow = seasonMap.get(seasonNumber)
+                const torrentRow = seasonPackMap.get(seasonNumber)
                 const existsInLibrary = existingSeasons.includes(seasonNumber)
                 const isMissing = missingSeasons.includes(seasonNumber)
+                const availableEpisodes = [...(episodeMap.get(seasonNumber)?.keys() || [])].sort((a, b) => a - b)
 
                 availableSeasons.push({
                     seasonNumber,
@@ -262,12 +211,13 @@ export async function GET(request) {
                     existsInLibrary,
                     isMissing,
                     hasTorrent: !!torrentRow,
+                    availableEpisodes,
+                    availableEpisodeCount: availableEpisodes.length,
                     torrentInfo: torrentRow ? {
                         id: torrentRow.id,
                         name: torrentRow.name,
                         size: torrentRow.size,
                         seeders: torrentRow.seeders,
-                        leechers: torrentRow.leechers,
                         added: torrentRow.added,
                         tags: torrentRow.tags
                     } : null
@@ -280,7 +230,8 @@ export async function GET(request) {
                 name: tvShowDetails.name,
                 isEnded,
                 totalSeasons,
-                exists: !!matchedSeries
+                exists: !!matchedSeries,
+                originalLanguage
             },
             seasons: availableSeasons
         })
@@ -288,4 +239,4 @@ export async function GET(request) {
     } catch (error) {
         return NextResponse.json({ error: `Error fetching season data: ${error.message}` }, { status: 500 })
     }
-} 
+}

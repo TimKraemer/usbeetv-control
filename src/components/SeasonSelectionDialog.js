@@ -2,6 +2,7 @@
 import { formatBytes } from '@/utils/formatters'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import DownloadIcon from '@mui/icons-material/Download'
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive'
 import WarningIcon from '@mui/icons-material/Warning'
 import {
     Alert,
@@ -16,6 +17,7 @@ import {
     DialogTitle,
     FormControlLabel,
     Grid,
+    Switch,
     Typography
 } from "@mui/material"
 import { useCallback, useEffect, useState } from 'react'
@@ -39,6 +41,8 @@ export const SeasonSelectionDialog = ({
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
     const [showSlowServerWarning, setShowSlowServerWarning] = useState(false)
     const [showSlowDownloadWarning, setShowSlowDownloadWarning] = useState(false)
+    const [isSubscribed, setIsSubscribed] = useState(false)
+    const [subscriptionLoading, setSubscriptionLoading] = useState(false)
 
     const fetchSeasons = useCallback(async () => {
         setLoading(true)
@@ -75,11 +79,51 @@ export const SeasonSelectionDialog = ({
         }
     }, [tmdbId, language])
 
+    const fetchSubscriptionStatus = useCallback(async () => {
+        try {
+            const response = await fetch('/api/subscriptions')
+            if (!response.ok) return
+            const data = await response.json()
+            const subscription = (data.subscriptions || []).find(
+                sub => String(sub.tmdbId) === String(tmdbId)
+            )
+            setIsSubscribed(!!subscription?.active)
+        } catch (error) {
+            console.error('Error fetching subscription status:', error)
+        }
+    }, [tmdbId])
+
     useEffect(() => {
         if (open && tmdbId) {
             fetchSeasons()
+            fetchSubscriptionStatus()
         }
-    }, [open, tmdbId, fetchSeasons])
+    }, [open, tmdbId, fetchSeasons, fetchSubscriptionStatus])
+
+    const handleSubscriptionToggle = async () => {
+        const nextSubscribed = !isSubscribed
+        setSubscriptionLoading(true)
+        try {
+            if (nextSubscribed) {
+                const response = await fetch('/api/subscriptions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tmdbId, title: showName, language }),
+                })
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+            } else {
+                const response = await fetch(`/api/subscriptions?tmdbId=${tmdbId}`, {
+                    method: 'DELETE',
+                })
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+            }
+            setIsSubscribed(nextSubscribed)
+        } catch (error) {
+            console.error('Error updating subscription:', error)
+        } finally {
+            setSubscriptionLoading(false)
+        }
+    }
 
     const handleSeasonToggle = (seasonNumber) => {
         setSelectedSeasons(prev =>
@@ -279,6 +323,34 @@ export const SeasonSelectionDialog = ({
                                 </Alert>
                             )}
 
+                            {showInfo && !showInfo.isEnded && (
+                                <Box className="mb-4 p-3 rounded-lg border border-purple-500 bg-purple-900/20 flex items-center justify-between gap-3">
+                                    <Box className="flex items-center gap-2 min-w-0">
+                                        <NotificationsActiveIcon className="text-purple-400" />
+                                        <Box className="min-w-0">
+                                            <Typography variant="body2" className="text-white font-medium">
+                                                Serie abonnieren
+                                            </Typography>
+                                            <Typography variant="caption" className="text-gray-400">
+                                                Neue Folgen automatisch laden, sobald verfügbar
+                                            </Typography>
+                                        </Box>
+                                    </Box>
+                                    <FormControlLabel
+                                        control={
+                                            <Switch
+                                                checked={isSubscribed}
+                                                onChange={handleSubscriptionToggle}
+                                                disabled={subscriptionLoading}
+                                                color="secondary"
+                                            />
+                                        }
+                                        label={isSubscribed ? 'Aktiv' : 'Aus'}
+                                        className="text-white m-0"
+                                    />
+                                </Box>
+                            )}
+
                             <Grid container spacing={2}>
                                 {seasons.map((season) => (
                                     <Grid item xs={12} sm={6} md={4} key={season.seasonNumber}>
@@ -298,6 +370,12 @@ export const SeasonSelectionDialog = ({
                                             <Typography variant="body2" className="text-gray-400">
                                                 {season.episodeCount} Episode{season.episodeCount !== 1 ? 'n' : ''}
                                             </Typography>
+
+                                            {!season.hasTorrent && season.availableEpisodeCount > 0 && (
+                                                <Typography variant="caption" className="text-purple-300 block mt-1">
+                                                    {season.availableEpisodeCount} Einzelfolge{season.availableEpisodeCount !== 1 ? 'n' : ''} verfügbar (Abo lädt automatisch)
+                                                </Typography>
+                                            )}
 
                                             <Chip
                                                 label={getSeasonStatusText(season)}

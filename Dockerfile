@@ -68,6 +68,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder /app/next.config.mjs ./next.config.mjs
 # COPY --from=builder /app/next-i18next.config.js ./next-i18next.config.js
 
+# Persistent data (series subscriptions) — mount a volume here
+RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
+ENV DATA_DIR /app/data
+VOLUME /app/data
+
 USER nextjs
 
 EXPOSE 3001

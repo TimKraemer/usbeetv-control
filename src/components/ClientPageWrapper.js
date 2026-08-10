@@ -3,6 +3,7 @@
 import { JellyfinNotice } from '@/components/JellyfinNotice'
 import { MobileWidgetsContainer } from '@/components/MobileWidgetsContainer'
 import SearchContainer from '@/components/SearchContainer'
+import { SubscriptionsWidget } from '@/components/SubscriptionsWidget'
 import { useDownloadState } from '@/hooks/useDownloadState'
 import { formatEta } from '@/utils/formatters'
 import CancelIcon from '@mui/icons-material/Cancel'
@@ -131,6 +132,7 @@ export const ClientPageWrapper = () => {
             </AnimatePresence>
 
             <MobileWidgetsContainer onCollapsedChange={setIsCollapsed} />
+            <SubscriptionsWidget />
             <JellyfinNotice isCollapsed={isCollapsed} />
             <SearchContainer />
         </>
