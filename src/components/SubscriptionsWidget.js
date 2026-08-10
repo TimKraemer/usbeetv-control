@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState } from 'react'
 const REFRESH_INTERVAL_MS = 60000
 
 function formatRelative(isoString) {
-    if (!isoString) return 'noch nie'
+    if (!isoString) return 'ausstehend'
     const diffMs = Date.now() - new Date(isoString).getTime()
     const minutes = Math.round(diffMs / 60000)
     if (minutes < 1) return 'gerade eben'
@@ -53,7 +53,12 @@ export const SubscriptionsWidget = () => {
     useEffect(() => {
         fetchSubscriptions()
         const interval = setInterval(fetchSubscriptions, REFRESH_INTERVAL_MS)
-        return () => clearInterval(interval)
+        const onChanged = () => fetchSubscriptions()
+        window.addEventListener('usbeetv:subscriptions-changed', onChanged)
+        return () => {
+            clearInterval(interval)
+            window.removeEventListener('usbeetv:subscriptions-changed', onChanged)
+        }
     }, [fetchSubscriptions])
 
     const handleCheckNow = async () => {
@@ -72,6 +77,7 @@ export const SubscriptionsWidget = () => {
         try {
             await fetch(`/api/subscriptions?tmdbId=${tmdbId}`, { method: 'DELETE' })
             setSubscriptions(prev => prev.filter(sub => sub.tmdbId !== tmdbId))
+            window.dispatchEvent(new Event('usbeetv:subscriptions-changed'))
         } catch (error) {
             console.error('Error removing subscription:', error)
         }

@@ -111,11 +111,23 @@ export const SeasonSelectionDialog = ({
                     body: JSON.stringify({ tmdbId, title: showName, language }),
                 })
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+                // Notify widget immediately, then kick off first check in background
+                window.dispatchEvent(new Event('usbeetv:subscriptions-changed'))
+                fetch('/api/subscriptions/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tmdbId }),
+                }).then(() => {
+                    window.dispatchEvent(new Event('usbeetv:subscriptions-changed'))
+                }).catch(error => {
+                    console.error('Error running initial subscription check:', error)
+                })
             } else {
                 const response = await fetch(`/api/subscriptions?tmdbId=${tmdbId}`, {
                     method: 'DELETE',
                 })
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`)
+                window.dispatchEvent(new Event('usbeetv:subscriptions-changed'))
             }
             setIsSubscribed(nextSubscribed)
         } catch (error) {
