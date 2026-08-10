@@ -74,34 +74,31 @@ async function getEpisodesInJellyfin(tmdbId) {
 }
 
 /**
- * Which episodes have aired in the season that is currently running (or, for
- * ended/fully-aired shows, the last aired season).
- * Returns { season, airedEpisodes } or null if nothing has aired yet.
+ * All aired episodes across every season, as { season, episode } pairs.
+ * Uses last_episode_to_air as the watermark: every episode before/at that
+ * point counts as aired (past seasons fully, current season up to last aired).
  */
-function getAiredEpisodes(tvShowDetails) {
-    const nextEpisode = tvShowDetails.next_episode_to_air
+function getAllAiredEpisodes(tvShowDetails) {
     const lastEpisode = tvShowDetails.last_episode_to_air
+    if (!lastEpisode?.season_number || !lastEpisode?.episode_number) return []
 
-    if (nextEpisode?.season_number) {
-        const airedEpisodes = []
-        // If the next episode opens a new season, the relevant season is the
-        // previous (fully aired) one
-        if (nextEpisode.episode_number === 1) {
-            if (!lastEpisode) return null
-            for (let i = 1; i <= lastEpisode.episode_number; i++) airedEpisodes.push(i)
-            return { season: lastEpisode.season_number, airedEpisodes }
+    const aired = []
+    for (const season of tvShowDetails.seasons || []) {
+        const seasonNumber = season.season_number
+        if (!seasonNumber || seasonNumber <= 0) continue
+
+        if (seasonNumber < lastEpisode.season_number) {
+            const count = season.episode_count || 0
+            for (let episode = 1; episode <= count; episode++) {
+                aired.push({ season: seasonNumber, episode })
+            }
+        } else if (seasonNumber === lastEpisode.season_number) {
+            for (let episode = 1; episode <= lastEpisode.episode_number; episode++) {
+                aired.push({ season: seasonNumber, episode })
+            }
         }
-        for (let i = 1; i < nextEpisode.episode_number; i++) airedEpisodes.push(i)
-        return { season: nextEpisode.season_number, airedEpisodes }
     }
-
-    if (lastEpisode?.season_number) {
-        const airedEpisodes = []
-        for (let i = 1; i <= lastEpisode.episode_number; i++) airedEpisodes.push(i)
-        return { season: lastEpisode.season_number, airedEpisodes }
-    }
-
-    return null
+    return aired
 }
 
 /** Check a single subscription and trigger downloads for new episodes. */
@@ -115,8 +112,8 @@ export async function checkSubscription(subscription) {
         const originalLanguage = tvShowDetails.original_language || null
         const isEnded = tvShowDetails.status === 'Ended' || tvShowDetails.status === 'Canceled'
 
-        const aired = getAiredEpisodes(tvShowDetails)
-        if (!aired) {
+        const airedEpisodes = getAllAiredEpisodes(tvShowDetails)
+        if (airedEpisodes.length === 0) {
             await markSubscriptionChecked(tmdbId)
             return { tmdbId, title: subscription.title, downloads, message: 'No aired episodes yet' }
         }
@@ -126,9 +123,9 @@ export async function checkSubscription(subscription) {
             subscription.downloaded.map(entry => `${entry.season}:${entry.episode}`)
         )
 
-        const wantedEpisodes = aired.airedEpisodes.filter(episode =>
-            !alreadyDownloaded.has(`${aired.season}:${episode}`) &&
-            !episodesInLibrary.has(`${aired.season}:${episode}`)
+        const wantedEpisodes = airedEpisodes.filter(({ season, episode }) =>
+            !alreadyDownloaded.has(`${season}:${episode}`) &&
+            !episodesInLibrary.has(`${season}:${episode}`)
         )
 
         if (wantedEpisodes.length === 0) {
@@ -140,40 +137,44 @@ export async function checkSubscription(subscription) {
             return { tmdbId, title: subscription.title, downloads, message: 'Up to date' }
         }
 
-        console.log(`[Subscriptions] ${label}: S${aired.season} missing episodes ${wantedEpisodes.join(', ')}`)
+        const wantedKeys = new Set(wantedEpisodes.map(({ season, episode }) => `${season}:${episode}`))
+        console.log(`[Subscriptions] ${label}: missing ${wantedEpisodes.length} episode(s): ${[...wantedKeys].join(', ')}`)
 
-        // Best single-episode release per wanted episode
+        // Best single-episode release per wanted episode (any season)
         const rows = await fetchTorrentsByTmdbId(tmdbId, 'series')
         const bestByEpisode = new Map()
         for (const row of rows) {
             if (!isEpisodeRelease(row)) continue
-            const { season, episode } = parseSeasonEpisode(row.name)
-            if (season !== aired.season || !wantedEpisodes.includes(episode)) continue
+            const parsed = parseSeasonEpisode(row.name)
+            if (!parsed?.episode) continue
+            const key = `${parsed.season}:${parsed.episode}`
+            if (!wantedKeys.has(key)) continue
             // Only auto-download releases matching the subscribed language
             if (!matchesLanguage(row, language, originalLanguage)) continue
 
-            const existing = bestByEpisode.get(episode)
+            const existing = bestByEpisode.get(key)
             if (!existing || rankTorrent(row) > rankTorrent(existing)) {
-                bestByEpisode.set(episode, row)
+                bestByEpisode.set(key, row)
             }
         }
 
-        for (const episode of wantedEpisodes) {
-            const row = bestByEpisode.get(episode)
+        for (const { season, episode } of wantedEpisodes) {
+            const key = `${season}:${episode}`
+            const row = bestByEpisode.get(key)
             if (!row) continue
 
             try {
                 const result = await sendToDeluge(getDownloadUrl(row.id), 'tv')
                 await markEpisodeDownloaded(tmdbId, {
-                    season: aired.season,
+                    season,
                     episode,
                     torrentId: row.id,
                     torrentName: row.name,
                 })
-                downloads.push({ season: aired.season, episode, torrentName: row.name, hash: result.hash })
-                console.log(`[Subscriptions] ${label}: sent S${String(aired.season).padStart(2, '0')}E${String(episode).padStart(2, '0')} to Deluge (${row.name})`)
+                downloads.push({ season, episode, torrentName: row.name, hash: result.hash })
+                console.log(`[Subscriptions] ${label}: sent S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')} to Deluge (${row.name})`)
             } catch (error) {
-                console.error(`[Subscriptions] ${label}: failed to download episode ${episode}:`, error.message)
+                console.error(`[Subscriptions] ${label}: failed to download S${season}E${episode}:`, error.message)
             }
         }
 

@@ -148,7 +148,7 @@ export const SubscriptionsWidget = () => {
                                                 {subscription.title || `TMDB ${subscription.tmdbId}`}
                                             </Typography>
                                             <Typography variant="caption" className="text-gray-400">
-                                                {lastEpisode ? `Zuletzt: ${lastEpisode}` : 'Noch keine Folge geladen'}
+                                                {lastEpisode ? `Zuletzt geladen: ${lastEpisode}` : 'Noch keine Folge geladen'}
                                                 {' • '}
                                                 Check {formatRelative(subscription.lastCheckedAt)}
                                             </Typography>
