@@ -42,12 +42,9 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
     }
 
     useEffect(() => {
-        if (!libraryLoading && existsInDb !== undefined) {
-            setLoading(false)
-        } else if (libraryLoading) {
-            setLoading(true)
-        }
-    }, [existsInDb, libraryLoading])
+        // Always clear the spinner once the library check finishes (success or failure)
+        setLoading(Boolean(libraryLoading))
+    }, [libraryLoading])
 
     // Sync torrentId with active downloads - set when active, clear when removed
     useEffect(() => {

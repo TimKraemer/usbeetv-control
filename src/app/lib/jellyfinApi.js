@@ -1,6 +1,10 @@
 // Temporarily disable SSL certificate verification for development
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
 
+const JELLYFIN_TIMEOUT_MS = 5000
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 1000
+
 async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', body = null) {
     // Validate environment variables
     if (!process.env.JELLYFIN_HOST) {
@@ -14,43 +18,56 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
     }
 
     const url = `https://${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}${endpoint}${queryParams}`
+    let lastError
 
-    try {
-        const options = {
-            method,
-            headers: {
-                'X-Emby-Token': process.env.JELLYFIN_API_KEY,
-                'Content-Type': 'application/json',
-            },
-            // Add timeout to prevent hanging requests
-            signal: AbortSignal.timeout(10000) // 10 second timeout
-        }
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            const options = {
+                method,
+                headers: {
+                    'X-Emby-Token': process.env.JELLYFIN_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+                signal: AbortSignal.timeout(JELLYFIN_TIMEOUT_MS),
+            }
 
-        if (body && method !== 'GET') {
-            options.body = JSON.stringify(body)
-        }
+            if (body && method !== 'GET') {
+                options.body = JSON.stringify(body)
+            }
 
-        const response = await fetch(url, options)
+            const response = await fetch(url, options)
 
-        if (!response.ok) {
-            throw new Error(`Jellyfin API returned ${response.status}: ${response.statusText}`)
-        }
+            if (!response.ok) {
+                throw new Error(`Jellyfin API returned ${response.status}: ${response.statusText}`)
+            }
 
-        // For POST requests that don't return JSON, return success status
-        if (method === 'POST' && response.status === 204) {
-            return { success: true }
-        }
+            // For POST requests that don't return JSON, return success status
+            if (method === 'POST' && response.status === 204) {
+                return { success: true }
+            }
 
-        return response.json()
-    } catch (error) {
-        if (error.name === 'AbortError') {
-            throw new Error('Request to Jellyfin timed out after 10 seconds')
+            return response.json()
+        } catch (error) {
+            lastError = error
+            const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError'
+            console.warn(`[Jellyfin] Attempt ${attempt}/${MAX_RETRIES} failed: ${error.message}`)
+
+            if (attempt < MAX_RETRIES) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
+                continue
+            }
+
+            if (isTimeout) {
+                throw new Error(`Request to Jellyfin timed out after ${JELLYFIN_TIMEOUT_MS}ms (${MAX_RETRIES} attempts)`)
+            }
+            if (error.code === 'ECONNREFUSED') {
+                throw new Error(`Cannot connect to Jellyfin at ${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}. Please check if Jellyfin is running and the host/port are correct.`)
+            }
+            throw error
         }
-        if (error.code === 'ECONNREFUSED') {
-            throw new Error(`Cannot connect to Jellyfin at ${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}. Please check if Jellyfin is running and the host/port are correct.`)
-        }
-        throw error
     }
+
+    throw lastError
 }
 
 export async function triggerLibraryScan() {
