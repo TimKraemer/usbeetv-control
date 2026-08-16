@@ -1,4 +1,5 @@
 import { authenticateDeluge } from '@/app/lib/authenticateDeluge'
+import { isTorrentComplete } from '@/app/lib/delugeTorrent'
 import { NextResponse } from 'next/server'
 
 async function getTorrentProgress(sessionId, torrentId) {
@@ -46,8 +47,7 @@ export async function GET(request) {
 
         const { progress, eta, state } = result
 
-        // Check if download is complete (progress = 1.0 and state indicates completion)
-        const isComplete = progress >= 1.0 && (state === 'Seeding' || state === 'Paused')
+        const isComplete = isTorrentComplete(progress, state)
 
         return NextResponse.json({ progress, eta, state, isComplete })
     } catch (error) {

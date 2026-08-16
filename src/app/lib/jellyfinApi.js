@@ -70,24 +70,31 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
     throw lastError
 }
 
+function getScanCooldownMs() {
+    const seconds = Number.parseInt(process.env.LIBRARY_SCAN_COOLDOWN_SECONDS || '300', 10)
+    return Math.max(1, seconds || 300) * 1000
+}
+
+export function getLibraryScanCooldown() {
+    const lastAt = globalThis.__jellyfinScanCooldown?.lastAt || 0
+    const cooldownMs = getScanCooldownMs()
+    const remainingMs = Math.max(0, lastAt + cooldownMs - Date.now())
+    return { lastAt, remainingMs, cooldownMs }
+}
+
 export async function triggerLibraryScan() {
     try {
-        // Global dedupe to avoid rapid repeated triggers
-        if (!globalThis.__jellyfinScanCooldown) {
-            globalThis.__jellyfinScanCooldown = { lastAt: 0 }
+        const cooldown = getLibraryScanCooldown()
+        if (cooldown.remainingMs > 0) {
+            return { success: true, skipped: true, ...cooldown }
         }
-        const now = Date.now()
-        const COOLDOWN_MS = 60 * 1000 // 1 minute
-        if (now - globalThis.__jellyfinScanCooldown.lastAt < COOLDOWN_MS) {
-            return { success: true, skipped: true }
-        }
-        globalThis.__jellyfinScanCooldown.lastAt = now
 
         // Trigger a scan of all libraries using the official Library/Refresh endpoint
         // Note: Jellyfin's API doesn't support scanning specific libraries only
         const result = await fetchFromJellyfin('/Library/Refresh', '', 'POST')
+        globalThis.__jellyfinScanCooldown = { lastAt: Date.now() }
         console.info('[INFO] Jellyfin library scan triggered successfully')
-        return result
+        return { ...result, success: true, skipped: false, ...getLibraryScanCooldown() }
     } catch (error) {
         console.error('[ERROR] Failed to trigger Jellyfin library scan:', error.message)
         throw error

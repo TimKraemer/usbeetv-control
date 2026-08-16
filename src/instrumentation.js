@@ -2,23 +2,41 @@ export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
 
     const intervalMinutes = Number.parseInt(process.env.SUBSCRIPTION_CHECK_INTERVAL_MINUTES || '30', 10)
-    if (!intervalMinutes || intervalMinutes <= 0) {
-        console.log('[Subscriptions] Scheduler disabled (SUBSCRIPTION_CHECK_INTERVAL_MINUTES <= 0)')
-        return
-    }
+    if (intervalMinutes > 0) {
+        const { checkAllSubscriptions } = await import('@/app/lib/subscriptionChecker')
 
-    const { checkAllSubscriptions } = await import('@/app/lib/subscriptionChecker')
-
-    const runCheck = async () => {
-        try {
-            await checkAllSubscriptions()
-        } catch (error) {
-            console.error('[Subscriptions] Scheduled check failed:', error.message)
+        const runCheck = async () => {
+            try {
+                await checkAllSubscriptions()
+            } catch (error) {
+                console.error('[Subscriptions] Scheduled check failed:', error.message)
+            }
         }
+
+        console.log(`[Subscriptions] Scheduler started (every ${intervalMinutes} min)`)
+        // First check shortly after startup, then on the configured interval
+        setTimeout(runCheck, 30 * 1000)
+        setInterval(runCheck, intervalMinutes * 60 * 1000)
+    } else {
+        console.log('[Subscriptions] Scheduler disabled (SUBSCRIPTION_CHECK_INTERVAL_MINUTES <= 0)')
     }
 
-    console.log(`[Subscriptions] Scheduler started (every ${intervalMinutes} min)`)
-    // First check shortly after startup, then on the configured interval
-    setTimeout(runCheck, 30 * 1000)
-    setInterval(runCheck, intervalMinutes * 60 * 1000)
+    const watchIntervalSeconds = Number.parseInt(process.env.DOWNLOAD_WATCH_INTERVAL_SECONDS || '60', 10)
+    if (watchIntervalSeconds > 0) {
+        const { watchPendingDownloads } = await import('@/app/lib/downloadWatcher')
+
+        const runWatch = async () => {
+            try {
+                await watchPendingDownloads()
+            } catch (error) {
+                console.error('[DownloadWatch] Scheduled check failed:', error.message)
+            }
+        }
+
+        console.log(`[DownloadWatch] Scheduler started (every ${watchIntervalSeconds}s)`)
+        setTimeout(runWatch, 15 * 1000)
+        setInterval(runWatch, watchIntervalSeconds * 1000)
+    } else {
+        console.log('[DownloadWatch] Scheduler disabled (DOWNLOAD_WATCH_INTERVAL_SECONDS <= 0)')
+    }
 }
