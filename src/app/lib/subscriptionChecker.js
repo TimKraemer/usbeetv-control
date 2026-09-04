@@ -1,3 +1,4 @@
+import { findSeriesByTmdbId, getSeriesEpisodeKeys } from '@/app/lib/jellyfinApi'
 import { sendToDeluge } from '@/app/lib/sendToDeluge'
 import {
     getSubscriptions,
@@ -5,72 +6,26 @@ import {
     markSubscriptionChecked,
     setSubscriptionActive,
 } from '@/app/lib/subscriptionStore'
+import { getTvShowDetails } from '@/app/lib/tmdbApi'
 import {
     fetchTorrentsByTmdbId,
     getDownloadUrl,
+    isDolbyVision,
     isEpisodeRelease,
     matchesLanguage,
     parseSeasonEpisode,
-    rankTorrent,
+    pickBestByKey,
+    sortTorrents,
 } from '@/app/lib/tsApi'
-
-const TMDB_TIMEOUT_MS = 10000
-const JELLYFIN_TIMEOUT_MS = 10000
-
-async function fetchJson(url, options = {}, { timeoutMs, label }) {
-    const response = await fetch(url, {
-        ...options,
-        signal: AbortSignal.timeout(timeoutMs),
-    })
-    if (!response.ok) {
-        throw new Error(`${label} returned ${response.status}: ${response.statusText}`)
-    }
-    return response.json()
-}
-
-async function fetchTVShowDetailsFromTMDB(tmdbId) {
-    if (!process.env.TMDB_API_KEY) {
-        throw new Error('TMDB_API_KEY environment variable is not set')
-    }
-    return fetchJson(
-        `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`,
-        {},
-        { timeoutMs: TMDB_TIMEOUT_MS, label: 'TMDB' }
-    )
-}
-
-async function fetchFromJellyfin(endpoint, queryParams = '') {
-    if (!process.env.JELLYFIN_HOST || !process.env.JELLYFIN_PORT || !process.env.JELLYFIN_API_KEY) {
-        throw new Error('Jellyfin environment variables are not set')
-    }
-    return fetchJson(
-        `https://${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}${endpoint}${queryParams}`,
-        { headers: { 'X-Emby-Token': process.env.JELLYFIN_API_KEY } },
-        { timeoutMs: JELLYFIN_TIMEOUT_MS, label: 'Jellyfin' }
-    )
-}
 
 /**
  * Episodes (as "S:E" strings) that physically exist in Jellyfin for a series.
  * Virtual items (missing/unaired placeholders) are excluded.
  */
 async function getEpisodesInJellyfin(tmdbId) {
-    const seriesData = await fetchFromJellyfin('/Items', '?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds')
-    const matchedSeries = (seriesData.Items || []).find(item => String(item.ProviderIds?.Tmdb) === String(tmdbId))
+    const matchedSeries = await findSeriesByTmdbId(tmdbId)
     if (!matchedSeries) return new Set()
-
-    const episodesData = await fetchFromJellyfin(
-        '/Items',
-        `?ParentId=${matchedSeries.Id}&Recursive=true&IncludeItemTypes=Episode&Fields=LocationType,ParentIndexNumber,IndexNumber`
-    )
-
-    const present = new Set()
-    for (const episode of episodesData.Items || []) {
-        if (episode.LocationType === 'Virtual') continue
-        if (episode.ParentIndexNumber == null || episode.IndexNumber == null) continue
-        present.add(`${episode.ParentIndexNumber}:${episode.IndexNumber}`)
-    }
-    return present
+    return getSeriesEpisodeKeys(matchedSeries.Id)
 }
 
 /**
@@ -108,7 +63,7 @@ export async function checkSubscription(subscription) {
     const downloads = []
 
     try {
-        const tvShowDetails = await fetchTVShowDetailsFromTMDB(tmdbId)
+        const tvShowDetails = await getTvShowDetails(tmdbId)
         const originalLanguage = tvShowDetails.original_language || null
         const isEnded = tvShowDetails.status === 'Ended' || tvShowDetails.status === 'Canceled'
 
@@ -140,23 +95,21 @@ export async function checkSubscription(subscription) {
         const wantedKeys = new Set(wantedEpisodes.map(({ season, episode }) => `${season}:${episode}`))
         console.log(`[Subscriptions] ${label}: missing ${wantedEpisodes.length} episode(s): ${[...wantedKeys].join(', ')}`)
 
-        // Best single-episode release per wanted episode (any season)
+        // Best single-episode release per wanted episode (any season).
+        // Only releases matching the subscribed language are auto-downloaded;
+        // sortTorrents puts Dolby Vision releases last so they are only used
+        // when no other release of that episode exists.
         const rows = await fetchTorrentsByTmdbId(tmdbId, 'series')
-        const bestByEpisode = new Map()
-        for (const row of rows) {
-            if (!isEpisodeRelease(row)) continue
+        const candidates = rows.filter(row =>
+            isEpisodeRelease(row) && matchesLanguage(row, language, originalLanguage)
+        )
+        const sortedRows = sortTorrents(candidates, { userLanguage: language, originalLanguage })
+        const bestByEpisode = pickBestByKey(sortedRows, row => {
             const parsed = parseSeasonEpisode(row.name)
-            if (!parsed?.episode) continue
+            if (!parsed?.episode) return null
             const key = `${parsed.season}:${parsed.episode}`
-            if (!wantedKeys.has(key)) continue
-            // Only auto-download releases matching the subscribed language
-            if (!matchesLanguage(row, language, originalLanguage)) continue
-
-            const existing = bestByEpisode.get(key)
-            if (!existing || rankTorrent(row) > rankTorrent(existing)) {
-                bestByEpisode.set(key, row)
-            }
-        }
+            return wantedKeys.has(key) ? key : null
+        })
 
         for (const { season, episode } of wantedEpisodes) {
             const key = `${season}:${episode}`
@@ -172,7 +125,8 @@ export async function checkSubscription(subscription) {
                     torrentName: row.name,
                 })
                 downloads.push({ season, episode, torrentName: row.name, hash: result.hash })
-                console.log(`[Subscriptions] ${label}: sent S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')} to Deluge (${row.name})`)
+                const dvNote = isDolbyVision(row) ? ' [Dolby Vision, no alternative]' : ''
+                console.log(`[Subscriptions] ${label}: sent S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')} to Deluge (${row.name})${dvNote}`)
             } catch (error) {
                 console.error(`[Subscriptions] ${label}: failed to download S${season}E${episode}:`, error.message)
             }

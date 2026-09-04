@@ -1,9 +1,14 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { NextResponse } from 'next/server'
+import { isPoolEditTokenValid } from '@/app/lib/poolEditAuth'
 
 export async function POST(request) {
     try {
+        if (!isPoolEditTokenValid(request.headers.get('x-pool-edit-token'))) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+        }
+
         const body = await request.json()
         const { currentAmount, targetAmount, contributors, lastUpdated } = body
 
@@ -57,7 +62,7 @@ export async function POST(request) {
                 }
             })
         } catch (fileError) {
-            console.error('Error updating .env.local file:', fileError)
+            console.error('Error updating .env file:', fileError)
             return NextResponse.json({
                 error: 'Failed to update environment file'
             }, { status: 500 })

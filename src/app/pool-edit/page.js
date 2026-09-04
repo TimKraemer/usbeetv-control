@@ -13,6 +13,8 @@ import {
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 
+const TOKEN_STORAGE_KEY = 'pool-edit-token'
+
 export default function PoolEditPage() {
     const [poolData, setPoolData] = useState({
         currentAmount: '',
@@ -20,58 +22,52 @@ export default function PoolEditPage() {
         contributors: '',
         lastUpdated: ''
     })
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
     const [success, setSuccess] = useState(false)
     const [authenticated, setAuthenticated] = useState(false)
     const [password, setPassword] = useState('')
     const [passwordError, setPasswordError] = useState(false)
-    const [correctPassword, setCorrectPassword] = useState('')
     const [passwordLoading, setPasswordLoading] = useState(true)
 
     useEffect(() => {
-        const initializePage = async () => {
-            // Check if already authenticated (stored in sessionStorage)
-            const isAuth = sessionStorage.getItem('pool-edit-authenticated')
-            if (isAuth === 'true') {
-                setAuthenticated(true)
-                setPasswordLoading(false)
-                await fetchPoolData()
-            } else {
-                await fetchPassword()
-            }
+        // Resume a session token from sessionStorage (the password itself never reaches the client)
+        const token = sessionStorage.getItem(TOKEN_STORAGE_KEY)
+        setPasswordLoading(false)
+        if (token) {
+            setAuthenticated(true)
+            fetchPoolData()
         }
-
-        initializePage()
     }, [])
 
-    const fetchPassword = async () => {
+    const handlePasswordSubmit = async (e) => {
+        e.preventDefault()
+        setPasswordLoading(true)
         try {
-            const response = await fetch('/api/pool-edit/auth')
-            if (!response.ok) {
-                throw new Error('Failed to fetch password')
+            const response = await fetch('/api/pool-edit/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            })
+            const data = await response.json().catch(() => ({}))
+            if (!response.ok || !data.token) {
+                if (response.status !== 401) {
+                    setError(data.error || 'Failed to authenticate')
+                }
+                setPasswordError(true)
+                setPassword('')
+                return
             }
-            const data = await response.json()
-            setCorrectPassword(data.password)
+            sessionStorage.setItem(TOKEN_STORAGE_KEY, data.token)
+            setAuthenticated(true)
+            setPasswordError(false)
+            setError(null)
+            fetchPoolData()
         } catch (error) {
-            setError(`Failed to load authentication: ${error.message}`)
+            setError(`Failed to authenticate: ${error.message}`)
         } finally {
             setPasswordLoading(false)
-            setLoading(false)
-        }
-    }
-
-    const handlePasswordSubmit = (e) => {
-        e.preventDefault()
-        if (password === correctPassword) {
-            setAuthenticated(true)
-            sessionStorage.setItem('pool-edit-authenticated', 'true')
-            setPasswordError(false)
-            fetchPoolData()
-        } else {
-            setPasswordError(true)
-            setPassword('')
         }
     }
 
@@ -117,6 +113,7 @@ export default function PoolEditPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'X-Pool-Edit-Token': sessionStorage.getItem(TOKEN_STORAGE_KEY) || '',
                 },
                 body: JSON.stringify({
                     currentAmount: Number.parseFloat(poolData.currentAmount),
@@ -126,6 +123,11 @@ export default function PoolEditPage() {
                 })
             })
 
+            if (response.status === 401) {
+                sessionStorage.removeItem(TOKEN_STORAGE_KEY)
+                setAuthenticated(false)
+                throw new Error('Session expired, please log in again')
+            }
             if (!response.ok) {
                 throw new Error('Failed to update pool data')
             }
@@ -178,11 +180,13 @@ export default function PoolEditPage() {
                                     className="mb-4"
                                     error={passwordError}
                                     helperText={passwordError ? "Incorrect password" : ""}
-                                    InputProps={{
-                                        className: 'text-white'
-                                    }}
-                                    InputLabelProps={{
-                                        className: 'text-gray-300'
+                                    slotProps={{
+                                        input: {
+                                            className: 'text-white'
+                                        },
+                                        inputLabel: {
+                                            className: 'text-gray-300'
+                                        }
                                     }}
                                 />
 
@@ -218,7 +222,7 @@ export default function PoolEditPage() {
                         <CardContent className="p-6">
                             <form onSubmit={handleSubmit}>
                                 <Grid container spacing={3}>
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Current Amount (€)"
@@ -227,16 +231,18 @@ export default function PoolEditPage() {
                                             value={poolData.currentAmount}
                                             onChange={(e) => handleInputChange('currentAmount', e.target.value)}
                                             className="text-white"
-                                            InputProps={{
-                                                className: 'text-white'
-                                            }}
-                                            InputLabelProps={{
-                                                className: 'text-gray-300'
+                                            slotProps={{
+                                                input: {
+                                                    className: 'text-white'
+                                                },
+                                                inputLabel: {
+                                                    className: 'text-gray-300'
+                                                }
                                             }}
                                         />
                                     </Grid>
 
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Target Amount (€)"
@@ -245,16 +251,18 @@ export default function PoolEditPage() {
                                             value={poolData.targetAmount}
                                             onChange={(e) => handleInputChange('targetAmount', e.target.value)}
                                             className="text-white"
-                                            InputProps={{
-                                                className: 'text-white'
-                                            }}
-                                            InputLabelProps={{
-                                                className: 'text-gray-300'
+                                            slotProps={{
+                                                input: {
+                                                    className: 'text-white'
+                                                },
+                                                inputLabel: {
+                                                    className: 'text-gray-300'
+                                                }
                                             }}
                                         />
                                     </Grid>
 
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Number of Contributors"
@@ -262,16 +270,18 @@ export default function PoolEditPage() {
                                             value={poolData.contributors}
                                             onChange={(e) => handleInputChange('contributors', e.target.value)}
                                             className="text-white"
-                                            InputProps={{
-                                                className: 'text-white'
-                                            }}
-                                            InputLabelProps={{
-                                                className: 'text-gray-300'
+                                            slotProps={{
+                                                input: {
+                                                    className: 'text-white'
+                                                },
+                                                inputLabel: {
+                                                    className: 'text-gray-300'
+                                                }
                                             }}
                                         />
                                     </Grid>
 
-                                    <Grid item xs={12} sm={6}>
+                                    <Grid size={{ xs: 12, sm: 6 }}>
                                         <TextField
                                             fullWidth
                                             label="Last Updated"
@@ -279,11 +289,13 @@ export default function PoolEditPage() {
                                             value={poolData.lastUpdated}
                                             onChange={(e) => handleInputChange('lastUpdated', e.target.value)}
                                             className="text-white"
-                                            InputProps={{
-                                                className: 'text-white'
-                                            }}
-                                            InputLabelProps={{
-                                                className: 'text-gray-300'
+                                            slotProps={{
+                                                input: {
+                                                    className: 'text-white'
+                                                },
+                                                inputLabel: {
+                                                    className: 'text-gray-300'
+                                                }
                                             }}
                                         />
                                     </Grid>

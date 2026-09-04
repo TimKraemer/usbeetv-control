@@ -1,12 +1,17 @@
-// Temporarily disable SSL certificate verification for development
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+import { Agent, fetch as undiciFetch } from 'undici'
 
 const JELLYFIN_TIMEOUT_MS = 5000
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 1000
+const LIBRARY_CACHE_TTL_MS = 60000
 
-async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', body = null) {
-    // Validate environment variables
+// Jellyfin runs with a self-signed certificate on the LAN. Only this agent
+// skips verification; every other outbound request keeps TLS checks.
+const jellyfinAgent = new Agent({
+    connect: { rejectUnauthorized: false },
+})
+
+function getBaseUrl() {
     if (!process.env.JELLYFIN_HOST) {
         throw new Error('JELLYFIN_HOST environment variable is not set')
     }
@@ -16,8 +21,15 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
     if (!process.env.JELLYFIN_API_KEY) {
         throw new Error('JELLYFIN_API_KEY environment variable is not set')
     }
+    return `https://${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}`
+}
 
-    const url = `https://${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}${endpoint}${queryParams}`
+/**
+ * Call the Jellyfin REST API with timeout and retries.
+ * Returns parsed JSON, or { success: true } for empty 204 responses.
+ */
+export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', body = null) {
+    const url = `${getBaseUrl()}${endpoint}${queryParams}`
     let lastError
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -29,24 +41,20 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
                     'Content-Type': 'application/json',
                 },
                 signal: AbortSignal.timeout(JELLYFIN_TIMEOUT_MS),
+                dispatcher: jellyfinAgent,
             }
-
             if (body && method !== 'GET') {
                 options.body = JSON.stringify(body)
             }
 
-            const response = await fetch(url, options)
-
+            const response = await undiciFetch(url, options)
             if (!response.ok) {
                 throw new Error(`Jellyfin API returned ${response.status}: ${response.statusText}`)
             }
-
-            // For POST requests that don't return JSON, return success status
-            if (method === 'POST' && response.status === 204) {
+            if (response.status === 204) {
                 return { success: true }
             }
-
-            return response.json()
+            return await response.json()
         } catch (error) {
             lastError = error
             const isTimeout = error.name === 'TimeoutError' || error.name === 'AbortError'
@@ -56,11 +64,10 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS))
                 continue
             }
-
             if (isTimeout) {
                 throw new Error(`Request to Jellyfin timed out after ${JELLYFIN_TIMEOUT_MS}ms (${MAX_RETRIES} attempts)`)
             }
-            if (error.code === 'ECONNREFUSED') {
+            if (error.code === 'ECONNREFUSED' || error.cause?.code === 'ECONNREFUSED') {
                 throw new Error(`Cannot connect to Jellyfin at ${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}. Please check if Jellyfin is running and the host/port are correct.`)
             }
             throw error
@@ -69,6 +76,99 @@ async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', bod
 
     throw lastError
 }
+
+// ---------------------------------------------------------------------------
+// Library item cache: the full movie/series lists are requested on every
+// search keystroke (batch library check), so share them across requests for
+// a short window and dedupe concurrent fetches.
+// ---------------------------------------------------------------------------
+
+const ITEM_QUERIES = {
+    Movie: '?Recursive=true&IncludeItemTypes=Movie&Fields=ProviderIds&Filters=IsNotFolder',
+    Series: '?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds',
+}
+
+const libraryCache = new Map() // type -> { items, expiresAt, inflight }
+
+export function invalidateLibraryCache() {
+    libraryCache.clear()
+}
+
+/** All library items of a type (Movie | Series), cached for a short TTL. */
+export async function getLibraryItems(type) {
+    const query = ITEM_QUERIES[type]
+    if (!query) throw new Error(`Unsupported library item type: ${type}`)
+
+    const cached = libraryCache.get(type)
+    const now = Date.now()
+    if (cached?.items && cached.expiresAt > now) return cached.items
+    if (cached?.inflight) return cached.inflight
+
+    const inflight = fetchFromJellyfin('/Items', query)
+        .then(data => {
+            const items = data.Items || []
+            libraryCache.set(type, { items, expiresAt: Date.now() + LIBRARY_CACHE_TTL_MS, inflight: null })
+            return items
+        })
+        .catch(error => {
+            libraryCache.delete(type)
+            throw error
+        })
+
+    libraryCache.set(type, { items: cached?.items || null, expiresAt: 0, inflight })
+    return inflight
+}
+
+/** Map of TMDB id (string) -> item for a library type. */
+export async function getLibraryItemsByTmdbId(type) {
+    const items = await getLibraryItems(type)
+    const map = new Map()
+    for (const item of items) {
+        const tmdbId = item.ProviderIds?.Tmdb
+        if (tmdbId) map.set(String(tmdbId), item)
+    }
+    return map
+}
+
+export async function findMovieByTmdbId(tmdbId) {
+    const map = await getLibraryItemsByTmdbId('Movie')
+    return map.get(String(tmdbId)) || null
+}
+
+export async function findSeriesByTmdbId(tmdbId) {
+    const map = await getLibraryItemsByTmdbId('Series')
+    return map.get(String(tmdbId)) || null
+}
+
+/** Season numbers that exist under a series (as Jellyfin knows them). */
+export async function getSeriesSeasonNumbers(seriesId) {
+    const data = await fetchFromJellyfin('/Items', `?ParentId=${seriesId}&IncludeItemTypes=Season`)
+    return (data.Items || [])
+        .map(season => season.IndexNumber)
+        .filter(number => Number.isInteger(number))
+}
+
+/**
+ * Episodes (as "S:E" strings) that physically exist for a series.
+ * Virtual items (missing/unaired placeholders) are excluded.
+ */
+export async function getSeriesEpisodeKeys(seriesId) {
+    const data = await fetchFromJellyfin(
+        '/Items',
+        `?ParentId=${seriesId}&Recursive=true&IncludeItemTypes=Episode&Fields=LocationType,ParentIndexNumber,IndexNumber`
+    )
+    const present = new Set()
+    for (const episode of data.Items || []) {
+        if (episode.LocationType === 'Virtual') continue
+        if (episode.ParentIndexNumber == null || episode.IndexNumber == null) continue
+        present.add(`${episode.ParentIndexNumber}:${episode.IndexNumber}`)
+    }
+    return present
+}
+
+// ---------------------------------------------------------------------------
+// Library scan
+// ---------------------------------------------------------------------------
 
 function getScanCooldownMs() {
     const seconds = Number.parseInt(process.env.LIBRARY_SCAN_COOLDOWN_SECONDS || '300', 10)
@@ -93,6 +193,7 @@ export async function triggerLibraryScan() {
         // Note: Jellyfin's API doesn't support scanning specific libraries only
         const result = await fetchFromJellyfin('/Library/Refresh', '', 'POST')
         globalThis.__jellyfinScanCooldown = { lastAt: Date.now() }
+        invalidateLibraryCache()
         console.info('[INFO] Jellyfin library scan triggered successfully')
         return { ...result, success: true, skipped: false, ...getLibraryScanCooldown() }
     } catch (error) {
@@ -103,7 +204,6 @@ export async function triggerLibraryScan() {
 
 export async function getLibraryFolders() {
     try {
-        // Get all library folders from Jellyfin
         const result = await fetchFromJellyfin('/Library/VirtualFolders')
         console.info('[INFO] Retrieved library folders from Jellyfin')
         return result

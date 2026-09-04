@@ -15,24 +15,23 @@
     "@emotion/cache": "^11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
-    "@mui/icons-material": "^7.3.11",
-    "@mui/material": "^7.3.11",
-    "@mui/material-nextjs": "^7.3.10",
+    "@mui/icons-material": "^9.4.0",
+    "@mui/material": "^9.4.0",
+    "@mui/material-nextjs": "^9.4.0",
     "dotenv": "^17.4.2",
-    "framer-motion": "^12.43.0",
-    "next": "16.3.0",
-    "node-fetch": "^3.3.2",
+    "framer-motion": "^13.2.0",
+    "next": "16.3.4",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-flagkit": "^2.0.4",
-    "undici": "^7.29.0"
+    "undici": "^8.10.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.26",
+    "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   },
   "packageManager": "bun@1.1.36"
 }

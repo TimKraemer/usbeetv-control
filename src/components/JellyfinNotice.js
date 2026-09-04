@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 
 export const JellyfinNotice = ({ isCollapsed = false }) => {
     return (
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
             {!isCollapsed && (
                 <motion.div
                     initial={{ opacity: 0, y: 20, height: 0 }}

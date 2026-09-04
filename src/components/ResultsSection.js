@@ -6,11 +6,11 @@ import { motion } from 'framer-motion'
 import { ResultCard } from './ResultCard'
 
 const containerVariants = {
-    hidden: { opacity: 0 },
+    hidden: { opacity: 1 },
     visible: {
         opacity: 1,
         transition: {
-            staggerChildren: 0.1
+            staggerChildren: 0.05
         }
     }
 }
@@ -26,13 +26,13 @@ export const ResultsSection = ({ title, results, type, className = '', loading =
         <motion.div
             className={`flex-1 overflow-hidden flex flex-col items-stretch ${className}`}
             variants={containerVariants}
-            initial="hidden"
+            initial={false}
             animate="visible"
         >
             <motion.div
-                initial={{ opacity: 0, x: -20 }}
+                initial={false}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5 }}
+                transition={{ duration: 0.3 }}
             >
                 <Typography variant="h5" className="mb-4 px-4 sm:px-6 lg:px-8">
                     {title}

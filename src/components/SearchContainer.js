@@ -3,6 +3,7 @@
 import { SearchBar } from '@/components/SearchBar'
 import { SearchResults } from '@/components/SearchResults'
 import { useSearch } from '@/hooks/useSearch'
+import { useEffect } from 'react'
 
 export default function SearchContainer() {
     const {
@@ -18,9 +19,18 @@ export default function SearchContainer() {
         isClient
     } = useSearch()
 
+    // Notify widgets without DOM MutationObserver (that competed with search UX)
+    useEffect(() => {
+        const movieCount = movieResults?.results?.length || 0
+        const tvCount = tvResults?.results?.length || 0
+        const hasResults = searchString.length >= 3 && (loading || movieCount > 0 || tvCount > 0 || !!error)
+        window.dispatchEvent(new CustomEvent('usbeetv:search-active', {
+            detail: { hasResults },
+        }))
+    }, [searchString, movieResults, tvResults, loading, error])
+
     return (
         <>
-            {/* Search Section - Only receives stable props */}
             <SearchBar
                 searchString={searchString}
                 onSearchChange={setSearchString}
@@ -30,7 +40,6 @@ export default function SearchContainer() {
                 isClient={isClient}
             />
 
-            {/* Content Section - Receives search results */}
             <SearchResults
                 searchString={searchString}
                 movieResults={movieResults}
@@ -41,4 +50,4 @@ export default function SearchContainer() {
             />
         </>
     )
-} 
+}

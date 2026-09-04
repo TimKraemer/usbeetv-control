@@ -1,5 +1,5 @@
 # Stage 1: image + git
-FROM node:lts-bullseye-slim AS git
+FROM node:lts-bookworm-slim AS git
 WORKDIR /app
 
 # install git
@@ -47,12 +47,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN /root/.bun/bin/bun run build
 
 # Production image, copy all the files and run next
-FROM node:lts-bullseye-slim AS runner
+FROM node:lts-bookworm-slim AS runner
 WORKDIR /app
 
-ENV NODE_ENV production
+ENV NODE_ENV=production
 # Uncomment the following line in case you want to disable telemetry during runtime.
-ENV NEXT_TELEMETRY_DISABLED 1
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
@@ -70,13 +70,13 @@ COPY --from=builder /app/next.config.mjs ./next.config.mjs
 
 # Persistent data (series subscriptions) — mount a volume here
 RUN mkdir -p /app/data && chown nextjs:nodejs /app/data
-ENV DATA_DIR /app/data
+ENV DATA_DIR=/app/data
 VOLUME /app/data
 
 USER nextjs
 
 EXPOSE 3001
 
-ENV PORT 3001
+ENV PORT=3001
 
 CMD ["node", "server.js"]

@@ -29,12 +29,14 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 ## Environment Variables
 
-Create a `.env.local` file with the following variables:
+Create a `.env` file (see `sample.env`) with the following variables:
 
 ```env
-# Torrent Syndikat API
+# Torrent Syndikat API (APIv2: base URL ends in /v2, key needs v2 permission)
+TS_API2_URL=
+TS_API2_KEY=
+# Legacy v1 values are still accepted as fallback
 TS_API_URL=
-TS_API_BACKUP_URL=
 TS_API_KEY=
 
 # TMDB API
@@ -60,6 +62,15 @@ SYNOLOGY_PORT="5001"
 SYNOLOGY_USERNAME="tk"
 SYNOLOGY_PASSWORD=
 SYNOLOGY_VOLUME="volume_3"
+
+# Series subscriptions and download watcher (persistent data lives in DATA_DIR)
+DATA_DIR="./data"
+SUBSCRIPTION_CHECK_INTERVAL_MINUTES="30"
+DOWNLOAD_WATCH_INTERVAL_SECONDS="60"
+LIBRARY_SCAN_COOLDOWN_SECONDS="300"
+
+# Pool editor (/pool-edit) password, checked server-side
+POOL_EDIT_PASSWORD=
 
 # PayPal Pool Configuration
 PAYPAL_POOL_URL="https://www.paypal.com/pool/9g4yQj1qn7"
@@ -87,6 +98,7 @@ The application now provides an enhanced experience for downloading TV shows:
 ### Download Process
 - **Batch Downloads**: Downloads multiple selected seasons simultaneously
 - **Language Validation**: Checks language availability and warns users about potential language mismatches
+- **Dolby Vision Avoidance**: Releases tagged or named as Dolby Vision (DV, DoVi) rank far below every other release and are only picked when no alternative exists; the season dialog marks such seasons with "Nur Dolby Vision"
 - **Progress Tracking**: Shows download progress for each season
 - **Error Handling**: Provides detailed feedback for failed downloads
 

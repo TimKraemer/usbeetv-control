@@ -31,7 +31,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
+    <html lang="de">
       <head>
         <meta name="apple-mobile-web-app-title" content="USBee TV Control" />
         <meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex" />

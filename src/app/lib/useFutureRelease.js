@@ -1,16 +1,12 @@
 'use client'
-import { useEffect, useState } from "react"
+import { useMemo } from 'react'
 
 export const useFutureRelease = (result, type) => {
-    const [futureRelease, setFutureRelease] = useState(false)
-
-    useEffect(() => {
-        const releaseDate = new Date(type === 'movie' ? result.release_date : result.first_air_date)
-        const currentDate = new Date()
-        if (releaseDate > currentDate) {
-            setFutureRelease(true)
-        }
+    return useMemo(() => {
+        const dateString = type === 'movie' ? result?.release_date : result?.first_air_date
+        if (!dateString) return false
+        const releaseDate = new Date(dateString)
+        if (Number.isNaN(releaseDate.getTime())) return false
+        return releaseDate > new Date()
     }, [result, type])
-
-    return futureRelease
 }

@@ -50,6 +50,11 @@ export const formatPercentage = (value, maxValue = 100, decimals = 1) => {
     return `${percentage.toFixed(decimals)}%`
 }
 
+// Keep letters/digits of every script (é, ñ, kanji, …) plus the punctuation
+// common in titles; TMDB handles those fine and the query is URL-encoded later.
 export const sanitizeSearchString = (str) => {
-    return str.trim().replace(/[^a-zA-Z0-9äöüÄÖÜß ]/g, '')
+    return String(str || '')
+        .replace(/[^\p{L}\p{N}\s'&:.!?-]/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
 } 

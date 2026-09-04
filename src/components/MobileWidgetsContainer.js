@@ -3,36 +3,22 @@
 import { useEffect, useState } from 'react'
 import { MobileWidgets } from './MobileWidgets'
 
+const DISK_SPACE_TIMEOUT_MS = 10000
+const DISK_SPACE_POLL_MS = 30000
+const DISK_SPACE_DEFER_MS = 500
+
 export const MobileWidgetsContainer = ({ onCollapsedChange }) => {
     const [diskInfo, setDiskInfo] = useState(null)
-    // const [poolInfo, setPoolInfo] = useState(null) // PayPal widget hidden
-    const [diskError, setDiskError] = useState(null)
-    // const [poolError, setPoolError] = useState(null) // PayPal widget hidden
     const [hasSearchResults, setHasSearchResults] = useState(false)
     const [isCollapsed, setIsCollapsed] = useState(false)
 
-    // Check for search results by observing the DOM
+    // Collapse widgets when search is active (driven by SearchContainer events)
     useEffect(() => {
-        const checkForSearchResults = () => {
-            const searchResults = document.querySelectorAll('[data-testid="search-results"], .search-results, [class*="ResultsSection"]')
-            const hasResults = searchResults.length > 0 &&
-                Array.from(searchResults).some(el => el.children.length > 0)
-            setHasSearchResults(hasResults)
+        const handleSearchActive = (event) => {
+            setHasSearchResults(Boolean(event.detail?.hasResults))
         }
-
-        // Check immediately
-        checkForSearchResults()
-
-        // Set up observer to watch for changes
-        const observer = new MutationObserver(checkForSearchResults)
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true,
-            attributes: true,
-            attributeFilter: ['class', 'style']
-        })
-
-        return () => observer.disconnect()
+        window.addEventListener('usbeetv:search-active', handleSearchActive)
+        return () => window.removeEventListener('usbeetv:search-active', handleSearchActive)
     }, [])
 
     // Notify parent when collapsed state changes
@@ -43,56 +29,49 @@ export const MobileWidgetsContainer = ({ onCollapsedChange }) => {
     }, [isCollapsed, onCollapsedChange])
 
     useEffect(() => {
-        // Fetch disk space data
+        let cancelled = false
+        let diskInterval
+
         const fetchDiskSpace = async () => {
             try {
-                const response = await fetch('/api/disk-space')
+                const response = await fetch('/api/disk-space', {
+                    signal: AbortSignal.timeout(DISK_SPACE_TIMEOUT_MS),
+                })
                 if (!response.ok) {
                     throw new Error('Failed to fetch disk space')
                 }
                 const data = await response.json()
-                setDiskInfo(data)
-                setDiskError(null)
+                if (!cancelled) {
+                    setDiskInfo(data)
+                }
             } catch (error) {
-                console.error('Error fetching disk space:', error)
-                setDiskError('Failed to load disk space')
+                if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+                    console.warn('Disk space check timed out')
+                } else {
+                    console.error('Error fetching disk space:', error)
+                }
             }
         }
 
-        // PayPal pool fetching disabled for now (widget hidden)
-        // const fetchPoolStatus = async () => {
-        //     try {
-        //         const response = await fetch('/api/paypal-pool-status')
-        //         if (!response.ok) {
-        //             throw new Error('Failed to fetch pool status')
-        //         }
-        //         const data = await response.json()
-        //         setPoolInfo(data)
-        //         setPoolError(null)
-        //     } catch (error) {
-        //         console.error('Error fetching pool status:', error)
-        //         setPoolError('Failed to load pool status')
-        //     }
-        // }
-
-        // Fetch disk space data
-        fetchDiskSpace()
-
-        // Set up polling for disk space (every 30 seconds)
-        const diskInterval = setInterval(fetchDiskSpace, 30000)
+        // Defer so search/API traffic is not blocked by Synology on first paint
+        const deferId = setTimeout(() => {
+            fetchDiskSpace()
+            diskInterval = setInterval(fetchDiskSpace, DISK_SPACE_POLL_MS)
+        }, DISK_SPACE_DEFER_MS)
 
         return () => {
-            clearInterval(diskInterval)
+            cancelled = true
+            clearTimeout(deferId)
+            if (diskInterval) clearInterval(diskInterval)
         }
     }, [])
 
     return (
         <MobileWidgets
             diskInfo={diskInfo}
-            // poolInfo={poolInfo} // PayPal widget hidden
             hasSearchResults={hasSearchResults}
             isCollapsed={isCollapsed}
             onCollapsedChange={setIsCollapsed}
         />
     )
-} 
+}

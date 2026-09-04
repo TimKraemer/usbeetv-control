@@ -1,4 +1,4 @@
-import { Agent } from 'undici'
+import { Agent, fetch as undiciFetch } from 'undici'
 
 // Custom agent with extended connect timeout for slow torrent server
 const slowServerAgent = new Agent({
@@ -17,9 +17,19 @@ const blacklist = ['.TS.', 'telesync', '.CAM', '.HDTS']
 const tagScores = {
     dl: 1, ml: 1,
     hevc: 1,
-    hdr10: 1, hdr10plus: 1, dv: 1,
+    hdr10: 1, hdr10plus: 1,
     dts: 1, dtshd: 1, dtshr: 1,
 }
+
+/**
+ * Dolby Vision releases play back badly on most of our client devices, so they
+ * are pushed to the very end of the ranking. The penalty is large enough that
+ * no combination of positive tags can outweigh it: a DV release is only
+ * chosen when nothing else is available.
+ */
+export const DOLBY_VISION_PENALTY = -100
+const DOLBY_VISION_TAGS = new Set(['dv', 'dovi', 'dolbyvision'])
+const DOLBY_VISION_NAME_REGEX = /(?:^|[\s._-])(?:DV|DoVi|Dolby[\s._-]?Vision)(?=$|[\s._-])/i
 
 export function getApiBaseUrl() {
     if (process.env.TS_API2_URL) return process.env.TS_API2_URL.replace(/\/$/, '')
@@ -31,10 +41,9 @@ export function getApiBaseUrl() {
 }
 
 function getApiKey() {
-    if (!process.env.TS_API2_KEY) {
-        throw new Error('TS_API2_KEY environment variable is not set')
-    }
-    return process.env.TS_API2_KEY
+    if (process.env.TS_API2_KEY) return process.env.TS_API2_KEY
+    if (process.env.TS_API_KEY) return process.env.TS_API_KEY
+    throw new Error('TS_API2_KEY (or TS_API_KEY) environment variable is not set')
 }
 
 async function tsFetchJson(path, params = {}) {
@@ -47,7 +56,7 @@ async function tsFetchJson(path, params = {}) {
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
             console.log(`[TS APIv2] ${path} attempt ${attempt}/${MAX_RETRIES}...`)
-            const response = await fetch(url, {
+            const response = await undiciFetch(url, {
                 headers: {
                     apiKey: getApiKey(),
                     Accept: 'application/json',
@@ -111,6 +120,13 @@ export function getDownloadUrl(torrentId) {
     return `${getApiBaseUrl()}/torrents/download.php?id=${torrentId}&apiKey=${getApiKey()}`
 }
 
+/** True if the release is (or contains) a Dolby Vision video track. */
+export function isDolbyVision(row) {
+    const tags = row.tags || []
+    if (tags.some(tag => DOLBY_VISION_TAGS.has(String(tag).toLowerCase()))) return true
+    return DOLBY_VISION_NAME_REGEX.test(row.name || '')
+}
+
 export function rankTorrent(row) {
     let score = 0
     for (const tag of row.tags || []) {
@@ -118,6 +134,9 @@ export function rankTorrent(row) {
     }
     if (row.name.includes('BluRay') || row.name.includes('BDRiP')) {
         score += 1
+    }
+    if (isDolbyVision(row)) {
+        score += DOLBY_VISION_PENALTY
     }
     return score
 }
@@ -171,8 +190,9 @@ export function validateLanguage(row, userLanguage, originalLanguage, type) {
 
 /**
  * Sort torrents: language match first (so warnings only appear when no
- * matching release exists at all), then quality score, then oldest first
- * (matches previous behavior).
+ * matching release exists at all), then quality score (Dolby Vision releases
+ * sink to the bottom via rankTorrent), then oldest first (matches previous
+ * behavior).
  */
 export function sortTorrents(rows, { userLanguage, originalLanguage } = {}) {
     return [...rows].sort((a, b) => {
@@ -183,6 +203,34 @@ export function sortTorrents(rows, { userLanguage, originalLanguage } = {}) {
         }
         return rankTorrent(b) - rankTorrent(a) || a.added - b.added
     })
+}
+
+/**
+ * Pick the first (= best, given rows sorted by sortTorrents) row per key.
+ * keyFn returns null/undefined to skip a row.
+ */
+export function pickBestByKey(sortedRows, keyFn) {
+    const best = new Map()
+    for (const row of sortedRows) {
+        const key = keyFn(row)
+        if (key === null || key === undefined) continue
+        if (!best.has(key)) best.set(key, row)
+    }
+    return best
+}
+
+/** Compact torrent summary for API responses. */
+export function summarizeTorrent(row) {
+    if (!row) return null
+    return {
+        id: row.id,
+        name: row.name,
+        size: row.size,
+        seeders: row.seeders,
+        added: row.added,
+        tags: row.tags,
+        dolbyVision: isDolbyVision(row),
+    }
 }
 
 const SEASON_EPISODE_REGEX = /S(\d{2,3})E(\d{2,3})/i

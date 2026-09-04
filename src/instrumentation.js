@@ -1,5 +1,8 @@
 export async function register() {
     if (process.env.NEXT_RUNTIME !== 'nodejs') return
+    // Dev-mode reloads can call register() again in the same process; keep one set of timers
+    if (globalThis.__usbeetvSchedulersStarted) return
+    globalThis.__usbeetvSchedulersStarted = true
 
     const intervalMinutes = Number.parseInt(process.env.SUBSCRIPTION_CHECK_INTERVAL_MINUTES || '30', 10)
     if (intervalMinutes > 0) {

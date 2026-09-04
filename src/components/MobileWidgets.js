@@ -71,9 +71,9 @@ export const MobileWidgets = ({
 
 
     return (
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
             <motion.div
-                initial={{ height: 0, opacity: 0 }}
+                initial={false}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -85,7 +85,7 @@ export const MobileWidgets = ({
                         {/* Disk Space Widget - Collapsed */}
                         <motion.div
                             className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
-                            initial={{ scale: 0.8, opacity: 0 }}
+                            initial={false}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.1 }}
                             whileHover={{ scale: 1.02 }}
@@ -153,7 +153,7 @@ export const MobileWidgets = ({
                         {/* Disk Space Widget - Uncollapsed */}
                         <motion.div
                             className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0"
-                            initial={{ scale: 0.8, opacity: 0 }}
+                            initial={false}
                             animate={{ scale: 1, opacity: 1 }}
                             transition={{ delay: 0.1 }}
                         >

@@ -23,7 +23,6 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
     const [torrentIds, setTorrentIds] = useState([])
     const [downloadStarted, setDownloadStarted] = useState(false)
     const [downloadInitiated, setDownloadInitiated] = useState(false)
-    const [loading, setLoading] = useState(true)
     const [languageWarning, setLanguageWarning] = useState(null)
     const [showLanguageDialog, setShowLanguageDialog] = useState(false)
     const [showSeasonDialog, setShowSeasonDialog] = useState(false)
@@ -40,11 +39,6 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
         if (vote >= 7) ratingBg = 'bg-green-600/90'
         else if (vote >= 5) ratingBg = 'bg-yellow-500/90'
     }
-
-    useEffect(() => {
-        // Always clear the spinner once the library check finishes (success or failure)
-        setLoading(Boolean(libraryLoading))
-    }, [libraryLoading])
 
     // Sync torrentId with active downloads - set when active, clear when removed
     useEffect(() => {
@@ -71,7 +65,8 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
     }, [torrentId, downloadInitiated])
 
     const handleCardClick = async () => {
-        if (loading || downloadStarted || downloadInitiated) return // Prevent double-clicks
+        // Only block while a download is in flight — library checks must not gate interaction
+        if (downloadStarted || downloadInitiated) return
 
         // For TV shows, always show season selection dialog (regardless of existence)
         if (type === 'tv') {
@@ -178,7 +173,8 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
         }
     }
 
-    const isDisabled = loading || (type === 'movie' && existsInDb?.exists) || downloadStarted || downloadInitiated
+    // Movies already in library are disabled; never gate on libraryLoading (that blocked search while disk-space held connections)
+    const isDisabled = (type === 'movie' && existsInDb?.exists) || downloadStarted || downloadInitiated
 
     // Extract year from release date
     const getYear = () => {
@@ -228,11 +224,11 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
             <MotionCard
                 key={result.id}
                 className={`rounded-lg min-w-[200px] max-w-[250px] flex flex-col bg-transparent relative overflow-hidden ${(downloadProgress.progress || downloadInitiated) ? 'bg-black/80' : ''}`}
-                initial={{ opacity: 0, y: 20, scale: 0.9 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{
                     duration: 0.3,
-                    delay: index * 0.1,
+                    delay: index * 0.05,
                     ease: "easeOut"
                 }}
                 whileHover={{
@@ -304,9 +300,9 @@ export const ResultCard = ({ result, type, index = 0, language, libraryStatus, l
 
                     {/* Status Overlay */}
                     <Box className="absolute top-2 right-2">
-                        {loading && (
+                        {libraryLoading && !existsInDb && (
                             <motion.div
-                                initial={{ opacity: 0 }}
+                                initial={false}
                                 animate={{ opacity: 1 }}
                                 transition={{ duration: 0.3 }}
                             >

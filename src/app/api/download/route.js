@@ -1,26 +1,13 @@
 import { sendToDeluge } from '@/app/lib/sendToDeluge'
+import { getOriginalLanguage } from '@/app/lib/tmdbApi'
 import {
     fetchTorrentsByTmdbId,
     getDownloadUrl,
+    isDolbyVision,
     sortTorrents,
     validateLanguage,
 } from '@/app/lib/tsApi'
 import { NextResponse } from 'next/server'
-
-async function fetchMovieOriginalLanguage(tmdbId) {
-    if (!process.env.TMDB_API_KEY) return null
-    try {
-        const response = await fetch(
-            `https://api.themoviedb.org/3/movie/${tmdbId}?api_key=${process.env.TMDB_API_KEY}`,
-            { signal: AbortSignal.timeout(4000) }
-        )
-        if (!response.ok) return null
-        const details = await response.json()
-        return details.original_language || null
-    } catch {
-        return null
-    }
-}
 
 export async function GET(request) {
     const { searchParams } = new URL(request.url)
@@ -43,13 +30,14 @@ export async function GET(request) {
     try {
         const [rows, originalLanguage] = await Promise.all([
             fetchTorrentsByTmdbId(tmdbId, 'movie'),
-            fetchMovieOriginalLanguage(tmdbId),
+            getOriginalLanguage('movie', tmdbId),
         ])
 
         if (rows.length === 0) {
             return NextResponse.json({ error: 'No results found' }, { status: 404 })
         }
 
+        // Language match first, then quality (Dolby Vision releases last), then age
         const sortedRows = sortTorrents(rows, { userLanguage: language, originalLanguage })
         const bestRow = sortedRows[0]
 
@@ -60,9 +48,11 @@ export async function GET(request) {
             }
         }
 
+        const dolbyVision = isDolbyVision(bestRow)
+        console.log(`[Download] Movie ${tmdbId}: ${bestRow.name}${dolbyVision ? ' (Dolby Vision, no alternative)' : ''}`)
         const result = await sendToDeluge(getDownloadUrl(bestRow.id), type)
-        return NextResponse.json(result)
+        return NextResponse.json({ ...result, torrentName: bestRow.name, dolbyVision })
     } catch (error) {
-        return NextResponse.json({ error: `Error fetching data: ${error}` }, { status: 500 })
+        return NextResponse.json({ error: `Error fetching data: ${error.message}` }, { status: 500 })
     }
 }

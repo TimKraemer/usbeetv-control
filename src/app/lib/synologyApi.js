@@ -1,7 +1,13 @@
-import https from 'node:https'
-import fetch from 'node-fetch'
+import { Agent, fetch as undiciFetch } from 'undici'
 
-const httpsAgent = new https.Agent({ rejectUnauthorized: false })
+const SYNOLOGY_TIMEOUT_MS = 8000
+// DSM error codes that mean "log in again"
+const SESSION_ERROR_CODES = new Set([105, 106, 107, 119])
+
+// The NAS uses a self-signed certificate; only this agent skips verification
+const synologyAgent = new Agent({
+    connect: { rejectUnauthorized: false },
+})
 
 class SynologyAPI {
     constructor() {
@@ -9,10 +15,26 @@ class SynologyAPI {
         this.sessionId = null
     }
 
+    async request(path, params) {
+        const url = new URL(`${this.baseUrl}${path}`)
+        for (const [key, value] of Object.entries(params)) {
+            url.searchParams.set(key, value)
+        }
+        const response = await undiciFetch(url, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            signal: AbortSignal.timeout(SYNOLOGY_TIMEOUT_MS),
+            dispatcher: synologyAgent,
+        })
+        if (!response.ok) {
+            throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+        }
+        return response.json()
+    }
+
     async authenticate() {
         try {
-            const authUrl = `${this.baseUrl}/webapi/auth.cgi`
-            const params = new URLSearchParams({
+            const data = await this.request('/webapi/auth.cgi', {
                 api: 'SYNO.API.Auth',
                 version: '3',
                 method: 'login',
@@ -21,20 +43,6 @@ class SynologyAPI {
                 session: 'FileStation',
                 format: 'sid'
             })
-
-            const response = await fetch(`${authUrl}?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                agent: httpsAgent,
-            })
-
-            if (!response.ok) {
-                throw new Error(`Authentication failed: ${response.status} ${response.statusText}`)
-            }
-
-            const data = await response.json()
 
             if (data.success !== true) {
                 const errorCode = data.error?.code
@@ -45,6 +53,7 @@ class SynologyAPI {
             this.sessionId = data.data.sid
             return this.sessionId
         } catch (error) {
+            this.sessionId = null
             throw new Error(`Synology authentication error: ${error.message}`)
         }
     }
@@ -55,27 +64,23 @@ class SynologyAPI {
                 await this.authenticate()
             }
 
-            const storageUrl = `${this.baseUrl}/webapi/entry.cgi`
-            const params = new URLSearchParams({
+            let data = await this.request('/webapi/entry.cgi', {
                 api: 'SYNO.Storage.CGI.Storage',
                 version: '1',
                 method: 'load_info',
                 _sid: this.sessionId
             })
 
-            const response = await fetch(`${storageUrl}?${params}`, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                agent: httpsAgent,
-            })
-
-            if (!response.ok) {
-                throw new Error(`Storage info request failed: ${response.status} ${response.statusText}`)
+            // Session expired or was revoked: log in once more and retry
+            if (data.success !== true && SESSION_ERROR_CODES.has(data.error?.code)) {
+                await this.authenticate()
+                data = await this.request('/webapi/entry.cgi', {
+                    api: 'SYNO.Storage.CGI.Storage',
+                    version: '1',
+                    method: 'load_info',
+                    _sid: this.sessionId
+                })
             }
-
-            const data = await response.json()
 
             if (data.success !== true) {
                 const errorCode = data.error?.code
@@ -120,11 +125,10 @@ class SynologyAPI {
     }
 
     formatVolumeInfo(volume) {
-        // Calculate disk space information using the correct field names
         const totalSize = Number.parseInt(volume.size.total)
         const usedSize = Number.parseInt(volume.size.used)
         const availableSize = totalSize - usedSize
-        const usePercent = Math.round((usedSize / totalSize) * 100)
+        const usePercent = totalSize > 0 ? Math.round((usedSize / totalSize) * 100) : 0
 
         return {
             filesystem: volume.id,
@@ -143,12 +147,20 @@ class SynologyAPI {
     }
 
     formatBytes(bytes) {
-        if (bytes === 0) return '0 B'
+        if (!bytes || bytes <= 0) return '0 B'
         const k = 1024
         const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
         return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
     }
 }
 
-export default SynologyAPI 
+let sharedInstance = null
+
+/** Process-wide instance so the DSM session is reused between polls. */
+export function getSynologyApi() {
+    if (!sharedInstance) sharedInstance = new SynologyAPI()
+    return sharedInstance
+}
+
+export default SynologyAPI

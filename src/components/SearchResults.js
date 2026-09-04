@@ -17,7 +17,7 @@ export const SearchResults = ({
         return (
             <motion.div
                 className="w-full px-4 sm:px-6 lg:px-8"
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
             >
@@ -32,7 +32,7 @@ export const SearchResults = ({
         return (
             <motion.div
                 className="max-w-2xl mx-auto text-center px-4 sm:px-6 lg:px-8"
-                initial={{ opacity: 0, y: 20 }}
+                initial={false}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
             >
@@ -65,9 +65,9 @@ export const SearchResults = ({
         <motion.div
             data-testid="search-results"
             className="flex flex-col gap-8 w-full"
-            initial={{ opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
+            transition={{ duration: 0.3 }}
         >
             <ResultsSection
                 title="Filme"

@@ -31,69 +31,10 @@ async function fetchWithTimeoutRetry(url, options = {}, {
     throw lastError
 }
 
-// Custom hook to check if a movie exists in the database
-export const useMovieExistsInDb = (movie) => {
-    const [movieExistsInDb, setMovieExistsInDb] = useState(undefined)
-
-    useEffect(() => {
-        let cancelled = false
-        const timer = setTimeout(async () => {
-            try {
-                const response = await fetchWithTimeoutRetry(`/api/library/movies?tmdbId=${movie.id}`)
-                const data = await response.json()
-                if (!cancelled) {
-                    setMovieExistsInDb({ exists: data.exists, isComplete: data.exists })
-                }
-            } catch (error) {
-                console.error("Error checking if movie exists in DB:", error)
-                if (!cancelled) {
-                    setMovieExistsInDb({ exists: false, isComplete: false })
-                }
-            }
-        }, 1500)
-
-        return () => {
-            cancelled = true
-            clearTimeout(timer)
-        }
-    }, [movie])
-
-    return movieExistsInDb
-}
-
-export const useTvShowExistsInDb = (tvShow) => {
-    const [tvShowStatus, setTvShowStatus] = useState(undefined)
-
-    useEffect(() => {
-        let cancelled = false
-        const timer = setTimeout(async () => {
-            try {
-                const response = await fetchWithTimeoutRetry(`/api/library/tvshows?tmdbId=${tvShow.id}`)
-                const data = await response.json()
-                if (!cancelled) {
-                    setTvShowStatus({ exists: data.exists, isComplete: data.missingSeasons?.length === 0 })
-                }
-            } catch (error) {
-                console.error("Error checking if TV show exists in DB:", error)
-                if (!cancelled) {
-                    setTvShowStatus({ exists: false, isComplete: false })
-                }
-            }
-        }, 1500)
-
-        return () => {
-            cancelled = true
-            clearTimeout(timer)
-        }
-    }, [tvShow])
-
-    return tvShowStatus
-}
-
 // Batch hook to check multiple items at once
 export const useBatchLibraryCheck = (results, type) => {
     const [libraryStatus, setLibraryStatus] = useState({})
-    const [loading, setLoading] = useState(true)
+    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         if (!results || results.length === 0) {

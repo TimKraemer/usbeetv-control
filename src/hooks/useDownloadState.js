@@ -5,13 +5,12 @@ import { createContext, useCallback, useContext, useState } from 'react'
 const DownloadStateContext = createContext()
 
 export const DownloadStateProvider = ({ children }) => {
-    const [hasActiveDownloads, setHasActiveDownloads] = useState(false)
     const [activeDownloads, setActiveDownloads] = useState([]) // Track individual downloads
+    const hasActiveDownloads = activeDownloads.length > 0
 
     // No persistence: each session starts clean
 
     const startDownload = useCallback((torrentId = null, tmdbId = null, type = null, title = null) => {
-        setHasActiveDownloads(true)
         if (torrentId) {
             setActiveDownloads(prev => {
                 const existing = prev.find(d => d.torrentId === torrentId)
@@ -42,13 +41,8 @@ export const DownloadStateProvider = ({ children }) => {
 
     const stopDownload = useCallback((torrentId = null) => {
         if (torrentId) {
-            setActiveDownloads(prev => {
-                const remaining = prev.filter(d => d.torrentId !== torrentId)
-                setHasActiveDownloads(remaining.length > 0)
-                return remaining
-            })
+            setActiveDownloads(prev => prev.filter(d => d.torrentId !== torrentId))
         } else {
-            setHasActiveDownloads(false)
             setActiveDownloads([])
         }
     }, [])
@@ -78,7 +72,6 @@ export const DownloadStateProvider = ({ children }) => {
 
     const clearCompletedDownloads = useCallback(() => {
         setActiveDownloads([])
-        setHasActiveDownloads(false)
     }, [])
 
     return (

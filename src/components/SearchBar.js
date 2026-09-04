@@ -29,15 +29,12 @@ export const SearchBar = memo(({
     // Preserve focus across re-renders
     useEffect(() => {
         if (wasFocusedRef.current && inputRef.current) {
-            // Small delay to ensure the DOM has updated
             const timeoutId = setTimeout(() => {
-                if (inputRef.current) {
-                    inputRef.current.focus()
-                }
+                inputRef.current?.focus()
             }, 0)
             return () => clearTimeout(timeoutId)
         }
-    })
+    }, [searchString])
 
     const handleMenuOpen = (event) => {
         setAnchorEl(event.currentTarget)
@@ -52,7 +49,7 @@ export const SearchBar = memo(({
         handleMenuClose()
     }
 
-    const handleKeyPress = (event) => {
+    const handleKeyDown = (event) => {
         if (event.key === 'Enter') {
             onSearch()
         }
@@ -78,7 +75,7 @@ export const SearchBar = memo(({
 
     return (
         <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={false}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
             className="w-full max-w-2xl mx-auto px-4"
@@ -87,70 +84,74 @@ export const SearchBar = memo(({
                 {/* Search Input */}
                 <div className="flex-1">
                     <TextField
-                        ref={inputRef}
                         fullWidth
                         value={searchString}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        onKeyPress={handleKeyPress}
+                        onKeyDown={handleKeyDown}
                         onFocus={handleInputFocus}
                         onBlur={handleInputBlur}
                         placeholder="Suche nach Filmen und Serien..."
                         variant="standard"
                         size="large"
                         className="bg-transparent"
-                        InputProps={{
-                            startAdornment: (
-                                <InputAdornment position="start" className="pl-6">
-                                    <motion.div
-                                        animate={{ rotate: searchString ? 360 : 0 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
-                                        <SearchIcon className="text-gray-400" />
-                                    </motion.div>
-                                </InputAdornment>
-                            ),
-                            endAdornment: (
-                                <InputAdornment position="end">
-                                    <AnimatePresence>
-                                        {searchString && (
-                                            <motion.div
-                                                initial={{ opacity: 0, scale: 0 }}
-                                                animate={{ opacity: 1, scale: 1 }}
-                                                exit={{ opacity: 0, scale: 0 }}
-                                                transition={{ duration: 0.2 }}
-                                            >
-                                                <IconButton
-                                                    size="small"
-                                                    onClick={handleClear}
-                                                    className="text-gray-400 hover:text-white"
+                        slotProps={{
+                            htmlInput: {
+                                ref: inputRef,
+                            },
+                            input: {
+                                startAdornment: (
+                                    <InputAdornment position="start" className="pl-6">
+                                        <motion.div
+                                            animate={{ rotate: searchString ? 360 : 0 }}
+                                            transition={{ duration: 0.3 }}
+                                        >
+                                            <SearchIcon className="text-gray-400" />
+                                        </motion.div>
+                                    </InputAdornment>
+                                ),
+                                endAdornment: (
+                                    <InputAdornment position="end">
+                                        <AnimatePresence>
+                                            {searchString && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, scale: 0 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    exit={{ opacity: 0, scale: 0 }}
+                                                    transition={{ duration: 0.2 }}
                                                 >
-                                                    <ClearIcon fontSize="small" />
-                                                </IconButton>
-                                            </motion.div>
-                                        )}
-                                    </AnimatePresence>
-                                </InputAdornment>
-                            ),
-                            sx: {
-                                '& .MuiInput-root': {
-                                    '&:before': {
-                                        borderBottom: 'none',
+                                                    <IconButton
+                                                        size="small"
+                                                        onClick={handleClear}
+                                                        className="text-gray-400 hover:text-white"
+                                                    >
+                                                        <ClearIcon fontSize="small" />
+                                                    </IconButton>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </InputAdornment>
+                                ),
+                                sx: {
+                                    '& .MuiInput-root': {
+                                        '&:before': {
+                                            borderBottom: 'none',
+                                        },
+                                        '&:after': {
+                                            borderBottom: 'none',
+                                        },
+                                        '&:hover:not(.Mui-disabled):before': {
+                                            borderBottom: 'none',
+                                        },
                                     },
-                                    '&:after': {
-                                        borderBottom: 'none',
+                                    '& .MuiInput-input': {
+                                        padding: '16px 0',
+                                        color: 'white',
+                                        '&::placeholder': {
+                                            color: 'rgba(255, 255, 255, 0.6)',
+                                            opacity: 1,
+                                        },
                                     },
-                                    '&:hover:not(.Mui-disabled):before': {
-                                        borderBottom: 'none',
-                                    },
-                                },
-                                '& .MuiInput-input': {
-                                    padding: '16px 0',
-                                    color: 'white',
-                                    '&::placeholder': {
-                                        color: 'rgba(255, 255, 255, 0.6)',
-                                        opacity: 1,
-                                    },
-                                },
+                                }
                             }
                         }}
                     />

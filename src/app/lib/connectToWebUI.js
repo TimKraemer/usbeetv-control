@@ -1,37 +1,20 @@
+import { delugeRpc } from '@/app/lib/delugeTorrent'
+
+/** Make sure the Deluge web UI is connected to a daemon. */
 export async function connectToWebUI(sessionId) {
-    // Check if the Deluge WebUI is connected
-    const connectionResponse = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
-        body: JSON.stringify({ method: 'web.connected', params: [], id: 2 })
-    })
-    const connectionResult = await connectionResponse.json()
+    const connected = await delugeRpc(sessionId, 'web.connected', [])
+    if (connected) return
 
-    if (!connectionResult.result) {
-        // Get available hosts
-        const hostsResponse = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
-            body: JSON.stringify({ method: 'web.get_hosts', params: [], id: 3 })
-        })
-        const hostsResult = await hostsResponse.json()
-        const hosts = hostsResult.result
+    const hosts = await delugeRpc(sessionId, 'web.get_hosts', [])
+    if (!hosts || hosts.length === 0) {
+        throw new Error('No available hosts to connect to Deluge')
+    }
 
-        if (!hosts || hosts.length === 0) {
-            throw new Error('No available hosts to connect to Deluge')
-        }
-
-        // Connect to the first host
-        const hostId = hosts[0][0]
-        const connectResponse = await fetch(`http://${process.env.DELUGE_HOST}:${process.env.DELUGE_PORT}/json`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Cookie': sessionId },
-            body: JSON.stringify({ method: 'web.connect', params: [hostId], id: 4 })
-        })
-        const connectResult = await connectResponse.json()
-
-        if (!connectResult.result) {
-            throw new Error('Failed to connect to Deluge host')
-        }
+    // Connect to the first host; web.connect returns the list of available
+    // methods on success and null on failure
+    const hostId = hosts[0][0]
+    const result = await delugeRpc(sessionId, 'web.connect', [hostId])
+    if (!result) {
+        throw new Error('Failed to connect to Deluge host')
     }
 }

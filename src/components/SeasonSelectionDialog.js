@@ -18,6 +18,7 @@ import {
     FormControlLabel,
     Grid,
     Switch,
+    Tooltip,
     Typography
 } from "@mui/material"
 import { useCallback, useEffect, useState } from 'react'
@@ -56,16 +57,16 @@ export const SeasonSelectionDialog = ({
 
         try {
             const response = await fetch(`/api/download/seasons?tmdbId=${tmdbId}&language=${language}`)
+            const data = await response.json().catch(() => ({}))
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
+                throw new Error(data.error || `HTTP error! status: ${response.status}`)
             }
-            const data = await response.json()
-            setSeasons(data.seasons)
-            setShowInfo(data.showInfo)
-
+            const loadedSeasons = Array.isArray(data.seasons) ? data.seasons : []
+            setSeasons(loadedSeasons)
+            setShowInfo(data.showInfo || null)
 
             // Pre-select only the next missing season that has a torrent available
-            const firstMissingSeason = data.seasons
+            const firstMissingSeason = loadedSeasons
                 .filter(season => season.isMissing && season.hasTorrent)
                 .map(season => season.seasonNumber)[0]
             setSelectedSeasons(firstMissingSeason !== undefined ? [firstMissingSeason] : [])
@@ -294,8 +295,10 @@ export const SeasonSelectionDialog = ({
                 onClose={onClose}
                 maxWidth="md"
                 fullWidth
-                PaperProps={{
-                    className: "bg-gray-900 text-white"
+                slotProps={{
+                    paper: {
+                        className: "bg-gray-900 text-white"
+                    }
                 }}
             >
                 <DialogTitle className="text-white">
@@ -365,7 +368,7 @@ export const SeasonSelectionDialog = ({
 
                             <Grid container spacing={2}>
                                 {seasons.map((season) => (
-                                    <Grid item xs={12} sm={6} md={4} key={season.seasonNumber}>
+                                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={season.seasonNumber}>
                                         <Box className={`p-4 border rounded-lg ${season.existsInLibrary
                                             ? 'border-green-500 bg-green-900/20'
                                             : season.hasTorrent
@@ -389,12 +392,23 @@ export const SeasonSelectionDialog = ({
                                                 </Typography>
                                             )}
 
-                                            <Chip
-                                                label={getSeasonStatusText(season)}
-                                                color={getSeasonStatusColor(season)}
-                                                size="small"
-                                                className="mt-2"
-                                            />
+                                            <Box className="flex flex-wrap gap-1 mt-2">
+                                                <Chip
+                                                    label={getSeasonStatusText(season)}
+                                                    color={getSeasonStatusColor(season)}
+                                                    size="small"
+                                                />
+                                                {season.torrentInfo?.dolbyVision && (
+                                                    <Tooltip title="Es gibt nur ein Dolby-Vision-Release. Die Wiedergabe funktioniert auf vielen Geräten nicht richtig.">
+                                                        <Chip
+                                                            label="Nur Dolby Vision"
+                                                            color="warning"
+                                                            size="small"
+                                                            variant="outlined"
+                                                        />
+                                                    </Tooltip>
+                                                )}
+                                            </Box>
 
                                             {season.hasTorrent && !season.existsInLibrary && (
                                                 <FormControlLabel
