@@ -28,7 +28,7 @@ function getBaseUrl() {
  * Call the Jellyfin REST API with timeout and retries.
  * Returns parsed JSON, or { success: true } for empty 204 responses.
  */
-export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', body = null) {
+export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GET', body = null, timeoutMs = JELLYFIN_TIMEOUT_MS) {
     const url = `${getBaseUrl()}${endpoint}${queryParams}`
     let lastError
 
@@ -40,7 +40,7 @@ export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GE
                     'X-Emby-Token': process.env.JELLYFIN_API_KEY,
                     'Content-Type': 'application/json',
                 },
-                signal: AbortSignal.timeout(JELLYFIN_TIMEOUT_MS),
+                signal: AbortSignal.timeout(timeoutMs),
                 dispatcher: jellyfinAgent,
             }
             if (body && method !== 'GET') {
@@ -65,7 +65,7 @@ export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GE
                 continue
             }
             if (isTimeout) {
-                throw new Error(`Request to Jellyfin timed out after ${JELLYFIN_TIMEOUT_MS}ms (${MAX_RETRIES} attempts)`)
+                throw new Error(`Request to Jellyfin timed out after ${timeoutMs}ms (${MAX_RETRIES} attempts)`)
             }
             if (error.code === 'ECONNREFUSED' || error.cause?.code === 'ECONNREFUSED') {
                 throw new Error(`Cannot connect to Jellyfin at ${process.env.JELLYFIN_HOST}:${process.env.JELLYFIN_PORT}. Please check if Jellyfin is running and the host/port are correct.`)
@@ -211,4 +211,83 @@ export async function getLibraryFolders() {
         console.error('[ERROR] Failed to get library folders from Jellyfin:', error.message)
         throw error
     }
+}
+
+// ---------------------------------------------------------------------------
+// Watch ranking: Jellyfin only stores play data per user, so the ranking is
+// built by reading every user's played items and adding them up.
+// ---------------------------------------------------------------------------
+
+const WATCH_RANKING_CACHE_TTL_MS = 10 * 60 * 1000
+const WATCH_RANKING_TIMEOUT_MS = 20000
+const WATCH_RANKING_LIMIT = 25
+
+const PLAYED_ITEMS_QUERY =
+    '?Recursive=true&IncludeItemTypes=Movie,Episode&Filters=IsPlayed&EnableUserData=true&EnableImages=false&Fields=SeriesId'
+
+function sortRanking(entries) {
+    return entries
+        .sort((a, b) => b.viewers - a.viewers || b.plays - a.plays || a.title.localeCompare(b.title))
+        .slice(0, WATCH_RANKING_LIMIT)
+}
+
+async function buildWatchRanking() {
+    const users = await fetchFromJellyfin('/Users')
+    const movies = new Map() // item id -> entry
+    const series = new Map() // series id -> entry, viewers collected as Set first
+
+    for (const user of users) {
+        const data = await fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS)
+        const seriesSeenByUser = new Set()
+
+        for (const item of data.Items || []) {
+            const plays = Math.max(1, item.UserData?.PlayCount || 0)
+
+            if (item.Type === 'Movie') {
+                const entry = movies.get(item.Id) || { id: item.Id, title: item.Name, year: item.ProductionYear || null, viewers: 0, plays: 0 }
+                entry.viewers += 1
+                entry.plays += plays
+                movies.set(item.Id, entry)
+            } else if (item.Type === 'Episode' && item.SeriesId) {
+                const entry = series.get(item.SeriesId) || { id: item.SeriesId, title: item.SeriesName || item.Name, viewers: 0, plays: 0 }
+                if (!seriesSeenByUser.has(item.SeriesId)) {
+                    seriesSeenByUser.add(item.SeriesId)
+                    entry.viewers += 1
+                }
+                entry.plays += 1
+                series.set(item.SeriesId, entry)
+            }
+        }
+    }
+
+    return {
+        movies: sortRanking([...movies.values()]),
+        series: sortRanking([...series.values()]),
+        userCount: users.length,
+        generatedAt: new Date().toISOString(),
+    }
+}
+
+/**
+ * Most watched movies and series across all Jellyfin users.
+ * viewers = users who played the title, plays = summed play counts
+ * (for series: played episodes, each counted once per user).
+ */
+export async function getWatchRanking() {
+    const cached = globalThis.__jellyfinWatchRanking
+    if (cached?.data && cached.expiresAt > Date.now()) return cached.data
+    if (cached?.inflight) return cached.inflight
+
+    const inflight = buildWatchRanking()
+        .then(data => {
+            globalThis.__jellyfinWatchRanking = { data, expiresAt: Date.now() + WATCH_RANKING_CACHE_TTL_MS, inflight: null }
+            return data
+        })
+        .catch(error => {
+            globalThis.__jellyfinWatchRanking = { data: cached?.data || null, expiresAt: 0, inflight: null }
+            throw error
+        })
+
+    globalThis.__jellyfinWatchRanking = { data: cached?.data || null, expiresAt: 0, inflight }
+    return inflight
 }
