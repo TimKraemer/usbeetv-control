@@ -97,7 +97,7 @@ export function invalidateLibraryCache() {
 }
 
 /** All library items of a type (Movie | Series), cached for a short TTL. */
-export async function getLibraryItems(type) {
+export async function getLibraryItems(type, timeoutMs = JELLYFIN_TIMEOUT_MS) {
     const query = ITEM_QUERIES[type]
     if (!query) throw new Error(`Unsupported library item type: ${type}`)
 
@@ -106,7 +106,7 @@ export async function getLibraryItems(type) {
     if (cached?.items && cached.expiresAt > now) return cached.items
     if (cached?.inflight) return cached.inflight
 
-    const inflight = fetchFromJellyfin('/Items', query)
+    const inflight = fetchFromJellyfin('/Items', query, 'GET', null, timeoutMs)
         .then(data => {
             const items = data.Items || []
             libraryCache.set(type, { items, expiresAt: Date.now() + LIBRARY_CACHE_TTL_MS, inflight: null })
@@ -222,7 +222,22 @@ export async function getLibraryFolders() {
 
 const WATCH_RANKING_CACHE_TTL_MS = 10 * 60 * 1000
 const WATCH_RANKING_TIMEOUT_MS = 20000
+const WATCH_RANKING_CONCURRENCY = 6
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** Run an async mapper over items with a limited number of parallel calls. */
+async function mapWithConcurrency(items, limit, mapper) {
+    const results = new Array(items.length)
+    let next = 0
+    const worker = async () => {
+        while (next < items.length) {
+            const index = next++
+            results[index] = await mapper(items[index])
+        }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+    return results
+}
 
 // "all" comes from Jellyfin's own user data (lifetime, includes titles marked
 // as played by hand). The time windows come from the Playback Reporting
@@ -238,7 +253,6 @@ const PLAYED_ITEMS_QUERY =
 // and are kept on disk, a day is only fetched again when its play count moved.
 const PLAYBACK_HISTORY_DAYS = 366
 const PLAYBACK_ACTIVITY_DAYS = 400
-const PLAYBACK_HISTORY_CONCURRENCY = 6
 const MIN_PLAY_SECONDS = { Movie: 600, Episode: 300 }
 
 function normalizeId(id) {
@@ -315,21 +329,17 @@ async function getPlaybackHistory(now) {
         }
     }
 
-    const queue = [...missing]
-    const worker = async () => {
-        for (let job = queue.shift(); job; job = queue.shift()) {
-            const items = await fetchFromJellyfin(`/user_usage_stats/${job.userId}/${job.day}/GetItems`, '?filter=Movie,Episode')
-            days[job.key] = {
-                count: job.count,
-                items: (Array.isArray(items) ? items : []).map(item => ({
-                    id: normalizeId(item.Id),
-                    type: item.Type,
-                    duration: Number(item.Duration) || 0,
-                })),
-            }
+    await mapWithConcurrency(missing, WATCH_RANKING_CONCURRENCY, async job => {
+        const items = await fetchFromJellyfin(`/user_usage_stats/${job.userId}/${job.day}/GetItems`, '?filter=Movie,Episode', 'GET', null, WATCH_RANKING_TIMEOUT_MS)
+        days[job.key] = {
+            count: job.count,
+            items: (Array.isArray(items) ? items : []).map(item => ({
+                id: normalizeId(item.Id),
+                type: item.Type,
+                duration: Number(item.Duration) || 0,
+            })),
         }
-    }
-    await Promise.all(Array.from({ length: PLAYBACK_HISTORY_CONCURRENCY }, worker))
+    })
 
     if (missing.length > 0) {
         console.info(`[INFO] Fetched playback history for ${missing.length} user days`)
@@ -429,9 +439,9 @@ async function applyPlaybackHistory(rows, movies, series, now) {
 async function buildWatchRanking() {
     const now = Date.now()
     const [users, libraryMovies, librarySeries, history] = await Promise.all([
-        fetchFromJellyfin('/Users'),
-        getLibraryItems('Movie'),
-        getLibraryItems('Series'),
+        fetchFromJellyfin('/Users', '', 'GET', null, WATCH_RANKING_TIMEOUT_MS),
+        getLibraryItems('Movie', WATCH_RANKING_TIMEOUT_MS),
+        getLibraryItems('Series', WATCH_RANKING_TIMEOUT_MS),
         getPlaybackHistory(now),
     ])
 
@@ -445,8 +455,10 @@ async function buildWatchRanking() {
         series.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
     }
 
-    for (const user of users) {
-        const data = await fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS)
+    const playedByUser = await mapWithConcurrency(users, WATCH_RANKING_CONCURRENCY, user =>
+        fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS))
+
+    for (const data of playedByUser) {
         const seriesSeenByUser = new Set() // "seriesId:period"
 
         for (const item of data.Items || []) {
@@ -501,7 +513,9 @@ async function buildWatchRanking() {
 export async function getWatchRanking() {
     const cached = globalThis.__jellyfinWatchRanking
     if (cached?.data && cached.expiresAt > Date.now()) return cached.data
-    if (cached?.inflight) return cached.inflight
+    // Building takes several seconds: hand out the previous ranking right away
+    // and let the refresh finish in the background
+    if (cached?.inflight) return cached.data || cached.inflight
 
     const inflight = buildWatchRanking()
         .then(data => {
@@ -510,9 +524,14 @@ export async function getWatchRanking() {
         })
         .catch(error => {
             globalThis.__jellyfinWatchRanking = { data: cached?.data || null, expiresAt: 0, inflight: null }
+            // An older ranking beats an error while Jellyfin is slow or down
+            if (cached?.data) {
+                console.warn(`[Jellyfin] Watch ranking refresh failed, serving previous result: ${error.message}`)
+                return cached.data
+            }
             throw error
         })
 
     globalThis.__jellyfinWatchRanking = { data: cached?.data || null, expiresAt: 0, inflight }
-    return inflight
+    return cached?.data || inflight
 }

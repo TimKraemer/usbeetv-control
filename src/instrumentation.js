@@ -42,4 +42,15 @@ export async function register() {
     } else {
         console.log('[DownloadWatch] Scheduler disabled (DOWNLOAD_WATCH_INTERVAL_SECONDS <= 0)')
     }
+
+    // Build the watch ranking once after startup so the first visitor does not wait for it
+    setTimeout(async () => {
+        try {
+            const { getWatchRanking } = await import('@/app/lib/jellyfinApi')
+            await getWatchRanking()
+            console.log('[WatchRanking] Initial ranking built')
+        } catch (error) {
+            console.warn('[WatchRanking] Initial build failed:', error.message)
+        }
+    }, 45 * 1000)
 }
