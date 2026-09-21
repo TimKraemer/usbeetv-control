@@ -249,10 +249,11 @@ const PLAYED_ITEMS_QUERY =
     '?Recursive=true&IncludeItemTypes=Movie,Episode&Filters=IsPlayed&EnableUserData=true&EnableImages=false&Fields=SeriesId'
 
 // Play history of the Playback Reporting plugin. Its SQL endpoint rejects API
-// keys, so the history is read per user and day. Finished days never change
-// and are kept on disk, a day is only fetched again when its play count moved.
+// keys, so the history is read per user and day. Days older than a few days
+// no longer change and are kept on disk, recent days are fetched every time.
 const PLAYBACK_HISTORY_DAYS = 366
 const PLAYBACK_ACTIVITY_DAYS = 400
+const PLAYBACK_SETTLED_AFTER_DAYS = 3
 const MIN_PLAY_SECONDS = { Movie: 600, Episode: 300 }
 
 function normalizeId(id) {
@@ -309,30 +310,36 @@ async function getPlaybackHistory(now) {
     }
 
     const firstDay = localDay(now - PLAYBACK_HISTORY_DAYS * DAY_MS)
+    const settledBefore = localDay(now - PLAYBACK_SETTLED_AFTER_DAYS * DAY_MS)
     const cached = await readPlaybackHistoryCache()
-    const days = {} // "userId:day" -> { count, items }
-    const missing = []
+    const days = {} // "userId:day" -> { items }
+    const missing = new Map()
     let since = null
 
     for (const user of activity) {
-        for (const [day, count] of Object.entries(user.user_usage || {})) {
+        for (const [activeDay, count] of Object.entries(user.user_usage || {})) {
             if (!(count > 0)) continue
-            if (!since || day < since) since = day
-            if (day < firstDay) continue
+            if (!since || activeDay < since) since = activeDay
 
-            const key = `${user.user_id}:${day}`
-            if (cached[key]?.count === count) {
-                days[key] = cached[key]
-            } else {
-                missing.push({ key, userId: user.user_id, day, count })
+            // The activity report and the item list cut days at different hours, so
+            // plays around midnight show up on a neighbouring day in the item list
+            for (const offset of [-1, 0, 1]) {
+                const day = localDay(new Date(`${activeDay}T12:00:00`).getTime() + offset * DAY_MS)
+                if (day < firstDay) continue
+
+                const key = `${user.user_id}:${day}`
+                if (day < settledBefore && cached[key]) {
+                    days[key] = cached[key]
+                } else {
+                    missing.set(key, { key, userId: user.user_id, day })
+                }
             }
         }
     }
 
-    await mapWithConcurrency(missing, WATCH_RANKING_CONCURRENCY, async job => {
+    await mapWithConcurrency([...missing.values()], WATCH_RANKING_CONCURRENCY, async job => {
         const items = await fetchFromJellyfin(`/user_usage_stats/${job.userId}/${job.day}/GetItems`, '?filter=Movie,Episode', 'GET', null, WATCH_RANKING_TIMEOUT_MS)
         days[job.key] = {
-            count: job.count,
             items: (Array.isArray(items) ? items : []).map(item => ({
                 id: normalizeId(item.Id),
                 type: item.Type,
@@ -341,8 +348,8 @@ async function getPlaybackHistory(now) {
         }
     })
 
-    if (missing.length > 0) {
-        console.info(`[INFO] Fetched playback history for ${missing.length} user days`)
+    if (missing.size > 0) {
+        console.info(`[INFO] Fetched playback history for ${missing.size} user days`)
         await writePlaybackHistoryCache(days).catch(error => {
             console.warn(`[Jellyfin] Could not store playback history cache: ${error.message}`)
         })
