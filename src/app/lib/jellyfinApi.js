@@ -397,9 +397,9 @@ function matchingPeriods(lastPlayedDate, now) {
 /**
  * Fill the time windows from the plugin's play history. Movies count one play
  * per user and day, series count each episode once per user. Very short plays
- * are ignored.
+ * are ignored. Users missing in Jellyfin's own play data are added to "all".
  */
-async function applyPlaybackHistory(rows, movies, series, now) {
+async function applyPlaybackHistory(rows, movies, series, allViewers, now) {
     const episodes = await fetchFromJellyfin(
         '/Items',
         '?Recursive=true&IncludeItemTypes=Episode&EnableImages=false&EnableUserData=false&Fields=SeriesId',
@@ -432,6 +432,15 @@ async function applyPlaybackHistory(rows, movies, series, now) {
             ? movieById.get(row.itemId)
             : series.get(seriesIdByEpisode.get(row.itemId))) || findByName(row)
         if (!entry) continue // title no longer in the library
+
+        // Jellyfin only marks finished titles as played and forgets them when a file is
+        // replaced. Whoever shows up in the history counts for "all" as well.
+        const allKey = `${entry.id}:${row.userId}`
+        if (!allViewers.has(allKey)) {
+            allViewers.add(allKey)
+            entry.stats.all.viewers += 1
+            entry.stats.all.plays += 1
+        }
 
         for (const [period, days] of windows) {
             if (row.playedAt < now - days * DAY_MS) continue
@@ -499,7 +508,10 @@ async function buildWatchRanking() {
     const playedByUser = await mapWithConcurrency(users, WATCH_RANKING_CONCURRENCY, user =>
         fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS))
 
-    for (const data of playedByUser) {
+    const allViewers = new Set() // "entryId:userId" of everyone counted for "all"
+
+    for (const [index, data] of playedByUser.entries()) {
+        const userId = normalizeId(users[index].Id)
         const seenByUser = new Set() // "entryId:period", copies of a title count once
 
         for (const item of data.Items || []) {
@@ -515,6 +527,7 @@ async function buildWatchRanking() {
                     if (!seenByUser.has(seenKey)) {
                         seenByUser.add(seenKey)
                         entry.stats[period].viewers += 1
+                        if (period === 'all') allViewers.add(`${entry.id}:${userId}`)
                     }
                     // Play counts are lifetime totals, inside a window only the last play is known
                     entry.stats[period].plays += period === 'all' ? Math.max(1, item.UserData?.PlayCount || 0) : 1
@@ -529,6 +542,7 @@ async function buildWatchRanking() {
                     if (!seenByUser.has(seenKey)) {
                         seenByUser.add(seenKey)
                         entry.stats[period].viewers += 1
+                        if (period === 'all') allViewers.add(`${entry.id}:${userId}`)
                     }
                     entry.stats[period].plays += 1
                 }
@@ -537,7 +551,7 @@ async function buildWatchRanking() {
     }
 
     if (history) {
-        await applyPlaybackHistory(history.rows, movies, series, now)
+        await applyPlaybackHistory(history.rows, movies, series, allViewers, now)
     }
 
     return {
