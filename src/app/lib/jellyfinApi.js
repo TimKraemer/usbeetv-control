@@ -254,6 +254,7 @@ const PLAYED_ITEMS_QUERY =
 const PLAYBACK_HISTORY_DAYS = 366
 const PLAYBACK_ACTIVITY_DAYS = 400
 const PLAYBACK_SETTLED_AFTER_DAYS = 3
+const PLAYBACK_CACHE_VERSION = 2
 const MIN_PLAY_SECONDS = { Movie: 600, Episode: 300 }
 
 function normalizeId(id) {
@@ -273,7 +274,7 @@ function getPlaybackHistoryPath() {
 async function readPlaybackHistoryCache() {
     try {
         const parsed = JSON.parse(await readFile(getPlaybackHistoryPath(), 'utf8'))
-        return parsed && typeof parsed.days === 'object' ? parsed.days : {}
+        return parsed?.version === PLAYBACK_CACHE_VERSION && typeof parsed.days === 'object' ? parsed.days : {}
     } catch (error) {
         if (error.code !== 'ENOENT') console.warn(`[Jellyfin] Ignoring unreadable playback history cache: ${error.message}`)
         return {}
@@ -284,7 +285,7 @@ async function writePlaybackHistoryCache(days) {
     const cachePath = getPlaybackHistoryPath()
     await mkdir(path.dirname(cachePath), { recursive: true })
     const tmpPath = `${cachePath}.tmp`
-    await writeFile(tmpPath, JSON.stringify({ days }), 'utf8')
+    await writeFile(tmpPath, JSON.stringify({ version: PLAYBACK_CACHE_VERSION, days }), 'utf8')
     await rename(tmpPath, cachePath)
 }
 
@@ -342,6 +343,7 @@ async function getPlaybackHistory(now) {
         days[job.key] = {
             items: (Array.isArray(items) ? items : []).map(item => ({
                 id: normalizeId(item.Id),
+                name: item.Name || '',
                 type: item.Type,
                 duration: Number(item.Duration) || 0,
             })),
@@ -363,6 +365,7 @@ async function getPlaybackHistory(now) {
             const rowKey = `${key}:${item.id}`
             const row = rows.get(rowKey) || {
                 itemId: item.id,
+                itemName: item.name,
                 itemType: item.type,
                 userId: normalizeId(userId),
                 day,
@@ -408,7 +411,16 @@ async function applyPlaybackHistory(rows, movies, series, now) {
     for (const episode of episodes.Items || []) {
         if (episode.SeriesId) seriesIdByEpisode.set(normalizeId(episode.Id), episode.SeriesId)
     }
-    const movieById = new Map([...movies.values()].map(entry => [normalizeId(entry.id), entry]))
+    const movieById = new Map([...movies].map(([itemId, entry]) => [normalizeId(itemId), entry]))
+
+    // Replaced or re-imported files get new item ids, their old plays are matched by title
+    const movieByTitle = new Map([...movies.values()].map(entry => [normalizeTitle(entry.title), entry]))
+    const seriesByTitle = new Map([...series.values()].map(entry => [normalizeTitle(entry.title), entry]))
+    const findByName = row => {
+        if (row.itemType === 'Movie') return movieByTitle.get(normalizeTitle(row.itemName))
+        const seriesName = row.itemName?.match(/^(.*?) - s\d+e\d+/i)?.[1]
+        return seriesName ? seriesByTitle.get(normalizeTitle(seriesName)) : undefined
+    }
 
     const windows = Object.entries(WATCH_RANKING_PERIODS).filter(([, days]) => days !== null)
     const counted = new Set() // dedupe keys for viewers and episodes
@@ -416,10 +428,10 @@ async function applyPlaybackHistory(rows, movies, series, now) {
     for (const row of rows) {
         if (row.duration < (MIN_PLAY_SECONDS[row.itemType] || 0)) continue
 
-        const entry = row.itemType === 'Movie'
+        const entry = (row.itemType === 'Movie'
             ? movieById.get(row.itemId)
-            : series.get(seriesIdByEpisode.get(row.itemId))
-        if (!entry) continue // item no longer in the library
+            : series.get(seriesIdByEpisode.get(row.itemId))) || findByName(row)
+        if (!entry) continue // title no longer in the library
 
         for (const [period, days] of windows) {
             if (row.playedAt < now - days * DAY_MS) continue
@@ -433,7 +445,9 @@ async function applyPlaybackHistory(rows, movies, series, now) {
             if (row.itemType === 'Movie') {
                 entry.stats[period].plays += 1
             } else {
-                const episodeKey = `${viewerKey}:${row.itemId}`
+                // Prefer the episode number so a re-imported episode is not counted twice
+                const episodeCode = row.itemName?.match(/ - (s\d+e\d+)/i)?.[1]?.toLowerCase()
+                const episodeKey = `${viewerKey}:${episodeCode || row.itemId}`
                 if (!counted.has(episodeKey)) {
                     counted.add(episodeKey)
                     entry.stats[period].plays += 1
@@ -441,6 +455,29 @@ async function applyPlaybackHistory(rows, movies, series, now) {
             }
         }
     }
+}
+
+/**
+ * Map of item id -> ranking entry. Copies of the same title (same TMDB id)
+ * share one entry so they show up once in the ranking.
+ */
+function indexLibrary(items) {
+    const byItemId = new Map()
+    const byTmdbId = new Map()
+    for (const item of items) {
+        const tmdbId = item.ProviderIds?.Tmdb
+        let entry = tmdbId ? byTmdbId.get(String(tmdbId)) : null
+        if (!entry) {
+            entry = { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() }
+            if (tmdbId) byTmdbId.set(String(tmdbId), entry)
+        }
+        byItemId.set(item.Id, entry)
+    }
+    return byItemId
+}
+
+function normalizeTitle(title) {
+    return String(title || '').trim().toLowerCase()
 }
 
 async function buildWatchRanking() {
@@ -453,20 +490,14 @@ async function buildWatchRanking() {
     ])
 
     // Start with the whole library so never-watched titles can be looked up too
-    const movies = new Map()
-    for (const item of libraryMovies) {
-        movies.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
-    }
-    const series = new Map()
-    for (const item of librarySeries) {
-        series.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
-    }
+    const movies = indexLibrary(libraryMovies)
+    const series = indexLibrary(librarySeries)
 
     const playedByUser = await mapWithConcurrency(users, WATCH_RANKING_CONCURRENCY, user =>
         fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS))
 
     for (const data of playedByUser) {
-        const seriesSeenByUser = new Set() // "seriesId:period"
+        const seenByUser = new Set() // "entryId:period", copies of a title count once
 
         for (const item of data.Items || []) {
             const periods = history ? ['all'] : matchingPeriods(item.UserData?.LastPlayedDate, now)
@@ -477,7 +508,11 @@ async function buildWatchRanking() {
                 }
                 const entry = movies.get(item.Id)
                 for (const period of periods) {
-                    entry.stats[period].viewers += 1
+                    const seenKey = `${entry.id}:${period}`
+                    if (!seenByUser.has(seenKey)) {
+                        seenByUser.add(seenKey)
+                        entry.stats[period].viewers += 1
+                    }
                     // Play counts are lifetime totals, inside a window only the last play is known
                     entry.stats[period].plays += period === 'all' ? Math.max(1, item.UserData?.PlayCount || 0) : 1
                 }
@@ -487,9 +522,9 @@ async function buildWatchRanking() {
                 }
                 const entry = series.get(item.SeriesId)
                 for (const period of periods) {
-                    const seenKey = `${item.SeriesId}:${period}`
-                    if (!seriesSeenByUser.has(seenKey)) {
-                        seriesSeenByUser.add(seenKey)
+                    const seenKey = `${entry.id}:${period}`
+                    if (!seenByUser.has(seenKey)) {
+                        seenByUser.add(seenKey)
                         entry.stats[period].viewers += 1
                     }
                     entry.stats[period].plays += 1
@@ -503,8 +538,8 @@ async function buildWatchRanking() {
     }
 
     return {
-        movies: [...movies.values()],
-        series: [...series.values()],
+        movies: [...new Set(movies.values())],
+        series: [...new Set(series.values())],
         userCount: users.length,
         periodSource: history ? 'playback-reporting' : 'last-played',
         historySince: history?.since || null,
