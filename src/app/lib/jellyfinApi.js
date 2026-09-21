@@ -220,58 +220,93 @@ export async function getLibraryFolders() {
 
 const WATCH_RANKING_CACHE_TTL_MS = 10 * 60 * 1000
 const WATCH_RANKING_TIMEOUT_MS = 20000
-const WATCH_RANKING_LIMIT = 25
+const DAY_MS = 24 * 60 * 60 * 1000
+
+// Jellyfin keeps only the last play date per user and item, so the time
+// windows count users/episodes whose last play falls into the window.
+const WATCH_RANKING_PERIODS = { all: null, year: 365, month: 30, week: 7 }
 
 const PLAYED_ITEMS_QUERY =
     '?Recursive=true&IncludeItemTypes=Movie,Episode&Filters=IsPlayed&EnableUserData=true&EnableImages=false&Fields=SeriesId'
 
-function sortRanking(entries) {
-    return entries
-        .sort((a, b) => b.viewers - a.viewers || b.plays - a.plays || a.title.localeCompare(b.title))
-        .slice(0, WATCH_RANKING_LIMIT)
+function emptyStats() {
+    const stats = {}
+    for (const period of Object.keys(WATCH_RANKING_PERIODS)) stats[period] = { viewers: 0, plays: 0 }
+    return stats
+}
+
+/** Periods a play date falls into; items without a date only count for "all". */
+function matchingPeriods(lastPlayedDate, now) {
+    const playedAt = lastPlayedDate ? new Date(lastPlayedDate).getTime() : Number.NaN
+    return Object.entries(WATCH_RANKING_PERIODS)
+        .filter(([, days]) => days === null || (Number.isFinite(playedAt) && playedAt >= now - days * DAY_MS))
+        .map(([period]) => period)
 }
 
 async function buildWatchRanking() {
-    const users = await fetchFromJellyfin('/Users')
-    const movies = new Map() // item id -> entry
-    const series = new Map() // series id -> entry, viewers collected as Set first
+    const [users, libraryMovies, librarySeries] = await Promise.all([
+        fetchFromJellyfin('/Users'),
+        getLibraryItems('Movie'),
+        getLibraryItems('Series'),
+    ])
+    const now = Date.now()
+
+    // Start with the whole library so never-watched titles can be looked up too
+    const movies = new Map()
+    for (const item of libraryMovies) {
+        movies.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
+    }
+    const series = new Map()
+    for (const item of librarySeries) {
+        series.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
+    }
 
     for (const user of users) {
         const data = await fetchFromJellyfin(`/Users/${user.Id}/Items`, PLAYED_ITEMS_QUERY, 'GET', null, WATCH_RANKING_TIMEOUT_MS)
-        const seriesSeenByUser = new Set()
+        const seriesSeenByUser = new Set() // "seriesId:period"
 
         for (const item of data.Items || []) {
-            const plays = Math.max(1, item.UserData?.PlayCount || 0)
+            const periods = matchingPeriods(item.UserData?.LastPlayedDate, now)
 
             if (item.Type === 'Movie') {
-                const entry = movies.get(item.Id) || { id: item.Id, title: item.Name, year: item.ProductionYear || null, viewers: 0, plays: 0 }
-                entry.viewers += 1
-                entry.plays += plays
-                movies.set(item.Id, entry)
-            } else if (item.Type === 'Episode' && item.SeriesId) {
-                const entry = series.get(item.SeriesId) || { id: item.SeriesId, title: item.SeriesName || item.Name, viewers: 0, plays: 0 }
-                if (!seriesSeenByUser.has(item.SeriesId)) {
-                    seriesSeenByUser.add(item.SeriesId)
-                    entry.viewers += 1
+                if (!movies.has(item.Id)) {
+                    movies.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
                 }
-                entry.plays += 1
-                series.set(item.SeriesId, entry)
+                const entry = movies.get(item.Id)
+                for (const period of periods) {
+                    entry.stats[period].viewers += 1
+                    // Play counts are lifetime totals, inside a window only the last play is known
+                    entry.stats[period].plays += period === 'all' ? Math.max(1, item.UserData?.PlayCount || 0) : 1
+                }
+            } else if (item.Type === 'Episode' && item.SeriesId) {
+                if (!series.has(item.SeriesId)) {
+                    series.set(item.SeriesId, { id: item.SeriesId, title: item.SeriesName || item.Name, year: null, stats: emptyStats() })
+                }
+                const entry = series.get(item.SeriesId)
+                for (const period of periods) {
+                    const seenKey = `${item.SeriesId}:${period}`
+                    if (!seriesSeenByUser.has(seenKey)) {
+                        seriesSeenByUser.add(seenKey)
+                        entry.stats[period].viewers += 1
+                    }
+                    entry.stats[period].plays += 1
+                }
             }
         }
     }
 
     return {
-        movies: sortRanking([...movies.values()]),
-        series: sortRanking([...series.values()]),
+        movies: [...movies.values()],
+        series: [...series.values()],
         userCount: users.length,
         generatedAt: new Date().toISOString(),
     }
 }
 
 /**
- * Most watched movies and series across all Jellyfin users.
- * viewers = users who played the title, plays = summed play counts
- * (for series: played episodes, each counted once per user).
+ * Watch stats for every movie and series across all Jellyfin users, per
+ * period (all, year, month, week). viewers = users who played the title,
+ * plays = play count (for series: played episodes, once per user).
  */
 export async function getWatchRanking() {
     const cached = globalThis.__jellyfinWatchRanking

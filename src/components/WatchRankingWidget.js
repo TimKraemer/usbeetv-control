@@ -1,20 +1,68 @@
 'use client'
 
+import ClearIcon from '@mui/icons-material/Clear'
 import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { Box, CircularProgress, IconButton, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import MovieIcon from '@mui/icons-material/Movie'
+import SearchIcon from '@mui/icons-material/Search'
+import {
+    Box,
+    Chip,
+    CircularProgress,
+    IconButton,
+    InputAdornment,
+    TextField,
+    ToggleButton,
+    ToggleButtonGroup,
+    Typography,
+} from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-const JELLYFIN_WEB_URL = 'https://usbeetv.tk22.de:8920/web/#/details?id='
+const JELLYFIN_URL = 'https://usbeetv.tk22.de:8920'
 const VISIBLE_ENTRIES = 10
+const MAX_ENTRIES = 50
 
-function entryDetails(entry, type) {
-    const viewers = `${entry.viewers} Zuschauer`
-    if (type === 'series') {
-        return `${viewers} • ${entry.plays} ${entry.plays === 1 ? 'Folge' : 'Folgen'} gesehen`
-    }
-    return `${viewers} • ${entry.plays}× abgespielt`
+const PERIODS = [
+    { key: 'all', label: 'Gesamt' },
+    { key: 'year', label: '12 Monate' },
+    { key: 'month', label: '30 Tage' },
+    { key: 'week', label: '7 Tage' },
+]
+
+const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600']
+
+function normalize(text) {
+    return (text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+function entryDetails(stats, type, period) {
+    if (stats.viewers === 0) return period === 'all' ? 'Noch nie gesehen' : 'In diesem Zeitraum nicht gesehen'
+    if (type === 'series') return `${stats.plays} ${stats.plays === 1 ? 'Folge' : 'Folgen'} gesehen`
+    // Play counts only exist as lifetime totals
+    if (period !== 'all') return null
+    return `${stats.plays}× abgespielt`
+}
+
+const Poster = ({ id, title }) => {
+    const [broken, setBroken] = useState(false)
+
+    return (
+        <Box className="w-10 h-[60px] shrink-0 rounded overflow-hidden bg-white/10 flex items-center justify-center">
+            {broken ? (
+                <MovieIcon fontSize="small" className="text-gray-500" />
+            ) : (
+                // biome-ignore lint/performance/noImgElement: posters come straight from Jellyfin, not via the Next image optimizer
+                <img
+                    src={`${JELLYFIN_URL}/Items/${id}/Images/Primary?fillWidth=80&fillHeight=120&quality=90`}
+                    alt={title}
+                    loading="lazy"
+                    className="w-full h-full object-cover"
+                    onError={() => setBroken(true)}
+                />
+            )}
+        </Box>
+    )
 }
 
 export const WatchRankingWidget = () => {
@@ -23,6 +71,8 @@ export const WatchRankingWidget = () => {
     const [failed, setFailed] = useState(false)
     const [isCollapsed, setIsCollapsed] = useState(true)
     const [type, setType] = useState('movies')
+    const [period, setPeriod] = useState('all')
+    const [query, setQuery] = useState('')
     const [showAll, setShowAll] = useState(false)
 
     const fetchRanking = useCallback(async () => {
@@ -45,8 +95,25 @@ export const WatchRankingWidget = () => {
         if (!isCollapsed && !ranking && !loading && !failed) fetchRanking()
     }, [isCollapsed, ranking, loading, failed, fetchRanking])
 
-    const entries = ranking?.[type] || []
-    const visibleEntries = showAll ? entries : entries.slice(0, VISIBLE_ENTRIES)
+    // Ranked list for the selected type and period; unwatched titles keep rank null
+    const ranked = useMemo(() => {
+        const entries = ranking?.[type] || []
+        const sorted = entries
+            .map(entry => ({ ...entry, current: entry.stats[period] }))
+            .sort((a, b) =>
+                b.current.viewers - a.current.viewers
+                || b.current.plays - a.current.plays
+                || a.title.localeCompare(b.title, 'de'))
+        return sorted.map((entry, index) => ({ ...entry, rank: entry.current.viewers > 0 ? index + 1 : null }))
+    }, [ranking, type, period])
+
+    const searchTerm = normalize(query.trim())
+    const matching = searchTerm
+        ? ranked.filter(entry => normalize(entry.title).includes(searchTerm))
+        : ranked.filter(entry => entry.rank !== null)
+    const limited = matching.slice(0, MAX_ENTRIES)
+    const visibleEntries = showAll || searchTerm ? limited : limited.slice(0, VISIBLE_ENTRIES)
+    const maxViewers = ranked[0]?.current.viewers || 0
 
     return (
         <AnimatePresence initial={false}>
@@ -79,21 +146,62 @@ export const WatchRankingWidget = () => {
                     </div>
 
                     {!isCollapsed && (
-                        <div className="flex flex-col gap-2 mt-2">
-                            <ToggleButtonGroup
+                        <div className="flex flex-col gap-3 mt-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <ToggleButtonGroup
+                                    size="small"
+                                    exclusive
+                                    value={type}
+                                    onChange={(_event, value) => {
+                                        if (value) {
+                                            setType(value)
+                                            setShowAll(false)
+                                        }
+                                    }}
+                                >
+                                    <ToggleButton value="movies" sx={{ px: 2, py: 0.25, textTransform: 'none' }}>Filme</ToggleButton>
+                                    <ToggleButton value="series" sx={{ px: 2, py: 0.25, textTransform: 'none' }}>Serien</ToggleButton>
+                                </ToggleButtonGroup>
+                                <div className="flex flex-wrap gap-1">
+                                    {PERIODS.map(({ key, label }) => (
+                                        <Chip
+                                            key={key}
+                                            label={label}
+                                            size="small"
+                                            color={period === key ? 'primary' : 'default'}
+                                            variant={period === key ? 'filled' : 'outlined'}
+                                            onClick={() => {
+                                                setPeriod(key)
+                                                setShowAll(false)
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+
+                            <TextField
                                 size="small"
-                                exclusive
-                                value={type}
-                                onChange={(_event, value) => {
-                                    if (value) {
-                                        setType(value)
-                                        setShowAll(false)
-                                    }
+                                fullWidth
+                                placeholder={type === 'series' ? 'Serie suchen' : 'Film suchen'}
+                                value={query}
+                                onChange={event => setQuery(event.target.value)}
+                                slotProps={{
+                                    input: {
+                                        startAdornment: (
+                                            <InputAdornment position="start">
+                                                <SearchIcon fontSize="small" className="text-gray-400" />
+                                            </InputAdornment>
+                                        ),
+                                        endAdornment: query ? (
+                                            <InputAdornment position="end">
+                                                <IconButton size="small" onClick={() => setQuery('')} aria-label="Suche leeren">
+                                                    <ClearIcon fontSize="small" />
+                                                </IconButton>
+                                            </InputAdornment>
+                                        ) : null,
+                                    },
                                 }}
-                            >
-                                <ToggleButton value="movies">Filme</ToggleButton>
-                                <ToggleButton value="series">Serien</ToggleButton>
-                            </ToggleButtonGroup>
+                            />
 
                             {loading && (
                                 <Box className="flex justify-center p-4">
@@ -110,45 +218,72 @@ export const WatchRankingWidget = () => {
                                 </Typography>
                             )}
 
-                            {!loading && !failed && ranking && entries.length === 0 && (
-                                <Typography variant="body2" className="text-gray-400">
-                                    Noch nichts gesehen.
+                            {!loading && !failed && ranking && visibleEntries.length === 0 && (
+                                <Typography variant="body2" className="text-gray-400 text-center py-2">
+                                    {searchTerm ? 'Kein Titel gefunden.' : 'In diesem Zeitraum wurde nichts gesehen.'}
                                 </Typography>
                             )}
 
-                            {visibleEntries.map((entry, index) => (
-                                <Box
-                                    key={entry.id}
-                                    className="flex items-center gap-3 bg-white/5 rounded-md p-2"
-                                >
-                                    <Typography variant="body2" className="text-gray-400 w-6 text-right shrink-0">
-                                        {index + 1}
-                                    </Typography>
-                                    <Box className="min-w-0">
+                            <div className="flex flex-col gap-1.5">
+                                {visibleEntries.map((entry) => {
+                                    const details = entryDetails(entry.current, type, period)
+                                    const barWidth = maxViewers > 0 ? (entry.current.viewers / maxViewers) * 100 : 0
+                                    return (
                                         <a
-                                            href={`${JELLYFIN_WEB_URL}${entry.id}`}
+                                            key={entry.id}
+                                            href={`${JELLYFIN_URL}/web/#/details?id=${entry.id}`}
                                             target="_blank"
                                             rel="noopener noreferrer"
-                                            className="block text-sm text-white truncate hover:underline"
+                                            className="flex items-center gap-3 bg-white/5 hover:bg-white/10 transition-colors duration-200 rounded-md p-2"
                                         >
-                                            {entry.title}
-                                            {entry.year ? ` (${entry.year})` : ''}
+                                            <span
+                                                className={`w-7 text-center shrink-0 font-bold tabular-nums ${
+                                                    RANK_COLORS[entry.rank - 1] || 'text-gray-500'
+                                                } ${entry.rank && entry.rank <= 3 ? 'text-lg' : 'text-sm'}`}
+                                            >
+                                                {entry.rank ?? '–'}
+                                            </span>
+                                            <Poster id={entry.id} title={entry.title} />
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm text-white truncate">
+                                                    {entry.title}
+                                                    {entry.year ? <span className="text-gray-400"> ({entry.year})</span> : null}
+                                                </div>
+                                                {details && (
+                                                    <div className="text-xs text-gray-400 truncate">{details}</div>
+                                                )}
+                                                <div className="mt-1.5 h-1 rounded-full bg-white/10 overflow-hidden">
+                                                    <div
+                                                        className="h-full rounded-full bg-yellow-400/80"
+                                                        style={{ width: `${barWidth}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 text-right leading-tight">
+                                                <div className="text-base font-semibold text-white tabular-nums">
+                                                    {entry.current.viewers}
+                                                </div>
+                                                <div className="text-[10px] uppercase tracking-wide text-gray-400">Nutzer</div>
+                                            </div>
                                         </a>
-                                        <Typography variant="caption" className="text-gray-400">
-                                            {entryDetails(entry, type)}
-                                        </Typography>
-                                    </Box>
-                                </Box>
-                            ))}
+                                    )
+                                })}
+                            </div>
 
-                            {entries.length > VISIBLE_ENTRIES && (
+                            {!searchTerm && limited.length > VISIBLE_ENTRIES && (
                                 <button
                                     type="button"
                                     className="text-xs text-gray-400 hover:text-gray-200 underline self-center"
                                     onClick={() => setShowAll(prev => !prev)}
                                 >
-                                    {showAll ? 'Weniger anzeigen' : `Alle ${entries.length} anzeigen`}
+                                    {showAll ? 'Weniger anzeigen' : `Top ${limited.length} anzeigen`}
                                 </button>
+                            )}
+
+                            {period !== 'all' && ranking && (
+                                <Typography variant="caption" className="text-gray-500 text-center">
+                                    Jellyfin merkt sich pro Nutzer nur das letzte Abspielen. Im Zeitraum zählt, wer den Titel zuletzt darin gesehen hat.
+                                </Typography>
                             )}
                         </div>
                     )}
