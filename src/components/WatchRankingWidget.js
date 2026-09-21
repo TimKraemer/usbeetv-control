@@ -5,6 +5,7 @@ import EmojiEventsIcon from '@mui/icons-material/EmojiEvents'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import MovieIcon from '@mui/icons-material/Movie'
 import SearchIcon from '@mui/icons-material/Search'
+import SortIcon from '@mui/icons-material/Sort'
 import {
     Box,
     Chip,
@@ -30,6 +31,11 @@ const PERIODS = [
     { key: 'week', label: '7 Tage', days: 7 },
 ]
 
+const SORTS = [
+    { key: 'viewers', label: 'Meistgesehen' },
+    { key: 'added', label: 'Neu hinzugefügt' },
+]
+
 const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600']
 
 function normalize(text) {
@@ -47,6 +53,13 @@ function periodNote(ranking, period) {
     const since = new Date(`${ranking.historySince}T12:00:00`)
     if (since.getTime() <= Date.now() - days * 24 * 60 * 60 * 1000) return null
     return `Abspieldaten gibt es erst seit dem ${since.toLocaleDateString('de-DE')}.`
+}
+
+function formatAdded(addedAt) {
+    if (!addedAt) return null
+    const date = new Date(addedAt)
+    if (Number.isNaN(date.getTime())) return null
+    return `Neu seit ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
 }
 
 function entryDetails(stats, type, period, hasHistory) {
@@ -85,6 +98,7 @@ export const WatchRankingWidget = () => {
     const [isCollapsed, setIsCollapsed] = useState(true)
     const [type, setType] = useState('movies')
     const [period, setPeriod] = useState('all')
+    const [sort, setSort] = useState('viewers')
     const [query, setQuery] = useState('')
     const [showAll, setShowAll] = useState(false)
 
@@ -120,10 +134,16 @@ export const WatchRankingWidget = () => {
         return sorted.map((entry, index) => ({ ...entry, rank: entry.current.viewers > 0 ? index + 1 : null }))
     }, [ranking, type, period])
 
+    // "Neu hinzugefügt" lists every title, newest first, and keeps the rank from the viewer ranking
+    const ordered = useMemo(() => {
+        if (sort !== 'added') return ranked
+        return [...ranked].sort((a, b) => (b.addedAt || '').localeCompare(a.addedAt || ''))
+    }, [ranked, sort])
+
     const searchTerm = normalize(query.trim())
     const matching = searchTerm
-        ? ranked.filter(entry => normalize(entry.title).includes(searchTerm))
-        : ranked.filter(entry => entry.rank !== null)
+        ? ordered.filter(entry => normalize(entry.title).includes(searchTerm))
+        : ordered.filter(entry => sort === 'added' || entry.rank !== null)
     const limited = matching.slice(0, MAX_ENTRIES)
     const visibleEntries = showAll || searchTerm ? limited : limited.slice(0, VISIBLE_ENTRIES)
     const maxViewers = ranked[0]?.current.viewers || 0
@@ -194,6 +214,23 @@ export const WatchRankingWidget = () => {
                                 </div>
                             </div>
 
+                            <div className="flex flex-wrap items-center gap-1">
+                                <SortIcon fontSize="small" className="text-gray-400 mr-1" />
+                                {SORTS.map(({ key, label }) => (
+                                    <Chip
+                                        key={key}
+                                        label={label}
+                                        size="small"
+                                        color={sort === key ? 'primary' : 'default'}
+                                        variant={sort === key ? 'filled' : 'outlined'}
+                                        onClick={() => {
+                                            setSort(key)
+                                            setShowAll(false)
+                                        }}
+                                    />
+                                ))}
+                            </div>
+
                             <TextField
                                 size="small"
                                 fullWidth
@@ -242,6 +279,7 @@ export const WatchRankingWidget = () => {
                             <div className="flex flex-col gap-1.5">
                                 {visibleEntries.map((entry) => {
                                     const details = entryDetails(entry.current, type, period, hasHistory)
+                                    const added = sort === 'added' ? formatAdded(entry.addedAt) : null
                                     const barWidth = maxViewers > 0 ? (entry.current.viewers / maxViewers) * 100 : 0
                                     return (
                                         <a
@@ -252,11 +290,11 @@ export const WatchRankingWidget = () => {
                                             className="flex items-center gap-3 bg-white/5 hover:bg-white/10 transition-colors duration-200 rounded-md p-2"
                                         >
                                             <span
-                                                className={`w-7 text-center shrink-0 font-bold tabular-nums ${
-                                                    RANK_COLORS[entry.rank - 1] || 'text-gray-500'
-                                                } ${entry.rank && entry.rank <= 3 ? 'text-lg' : 'text-sm'}`}
+                                                className={`w-8 text-center shrink-0 font-bold tabular-nums ${
+                                                    (sort === 'viewers' && RANK_COLORS[entry.rank - 1]) || 'text-gray-500'
+                                                } ${sort === 'viewers' && entry.rank && entry.rank <= 3 ? 'text-lg' : 'text-sm'}`}
                                             >
-                                                {entry.rank ?? '–'}
+                                                {entry.rank ? `${sort === 'added' ? '#' : ''}${entry.rank}` : '–'}
                                             </span>
                                             <Poster id={entry.id} title={entry.title} />
                                             <div className="min-w-0 flex-1">
@@ -264,6 +302,9 @@ export const WatchRankingWidget = () => {
                                                     {entry.title}
                                                     {entry.year ? <span className="text-gray-400"> ({entry.year})</span> : null}
                                                 </div>
+                                                {added && (
+                                                    <div className="text-xs text-blue-300 truncate">{added}</div>
+                                                )}
                                                 {details && (
                                                     <div className="text-xs text-gray-400 truncate">{details}</div>
                                                 )}
@@ -291,7 +332,7 @@ export const WatchRankingWidget = () => {
                                     className="text-xs text-gray-400 hover:text-gray-200 underline self-center"
                                     onClick={() => setShowAll(prev => !prev)}
                                 >
-                                    {showAll ? 'Weniger anzeigen' : `Top ${limited.length} anzeigen`}
+                                    {showAll ? 'Weniger anzeigen' : sort === 'added' ? `${limited.length} anzeigen` : `Top ${limited.length} anzeigen`}
                                 </button>
                             )}
 

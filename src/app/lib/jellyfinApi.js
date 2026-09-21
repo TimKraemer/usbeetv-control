@@ -86,8 +86,8 @@ export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GE
 // ---------------------------------------------------------------------------
 
 const ITEM_QUERIES = {
-    Movie: '?Recursive=true&IncludeItemTypes=Movie&Fields=ProviderIds&Filters=IsNotFolder',
-    Series: '?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds',
+    Movie: '?Recursive=true&IncludeItemTypes=Movie&Fields=ProviderIds,DateCreated&Filters=IsNotFolder',
+    Series: '?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds,DateCreated,DateLastMediaAdded',
 }
 
 const libraryCache = new Map() // type -> { items, expiresAt, inflight }
@@ -468,9 +468,12 @@ function indexLibrary(items) {
         const tmdbId = item.ProviderIds?.Tmdb
         let entry = tmdbId ? byTmdbId.get(String(tmdbId)) : null
         if (!entry) {
-            entry = { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() }
+            entry = { id: item.Id, title: item.Name, year: item.ProductionYear || null, addedAt: null, stats: emptyStats() }
             if (tmdbId) byTmdbId.set(String(tmdbId), entry)
         }
+        // For series the newest episode counts, not the day the show first appeared
+        const addedAt = item.DateLastMediaAdded || item.DateCreated || null
+        if (addedAt && (!entry.addedAt || addedAt > entry.addedAt)) entry.addedAt = addedAt
         byItemId.set(item.Id, entry)
     }
     return byItemId
@@ -504,7 +507,7 @@ async function buildWatchRanking() {
 
             if (item.Type === 'Movie') {
                 if (!movies.has(item.Id)) {
-                    movies.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, stats: emptyStats() })
+                    movies.set(item.Id, { id: item.Id, title: item.Name, year: item.ProductionYear || null, addedAt: null, stats: emptyStats() })
                 }
                 const entry = movies.get(item.Id)
                 for (const period of periods) {
@@ -518,7 +521,7 @@ async function buildWatchRanking() {
                 }
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 if (!series.has(item.SeriesId)) {
-                    series.set(item.SeriesId, { id: item.SeriesId, title: item.SeriesName || item.Name, year: null, stats: emptyStats() })
+                    series.set(item.SeriesId, { id: item.SeriesId, title: item.SeriesName || item.Name, year: null, addedAt: null, stats: emptyStats() })
                 }
                 const entry = series.get(item.SeriesId)
                 for (const period of periods) {
