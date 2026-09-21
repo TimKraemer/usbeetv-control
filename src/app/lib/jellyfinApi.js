@@ -1,3 +1,5 @@
+import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import path from 'node:path'
 import { Agent, fetch as undiciFetch } from 'undici'
 
 const JELLYFIN_TIMEOUT_MS = 5000
@@ -222,12 +224,141 @@ const WATCH_RANKING_CACHE_TTL_MS = 10 * 60 * 1000
 const WATCH_RANKING_TIMEOUT_MS = 20000
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// Jellyfin keeps only the last play date per user and item, so the time
-// windows count users/episodes whose last play falls into the window.
+// "all" comes from Jellyfin's own user data (lifetime, includes titles marked
+// as played by hand). The time windows come from the Playback Reporting
+// plugin's play history. Without the plugin they fall back to the last play
+// date, the only date Jellyfin itself keeps per user and item.
 const WATCH_RANKING_PERIODS = { all: null, year: 365, month: 30, week: 7 }
 
 const PLAYED_ITEMS_QUERY =
     '?Recursive=true&IncludeItemTypes=Movie,Episode&Filters=IsPlayed&EnableUserData=true&EnableImages=false&Fields=SeriesId'
+
+// Play history of the Playback Reporting plugin. Its SQL endpoint rejects API
+// keys, so the history is read per user and day. Finished days never change
+// and are kept on disk, a day is only fetched again when its play count moved.
+const PLAYBACK_HISTORY_DAYS = 366
+const PLAYBACK_ACTIVITY_DAYS = 400
+const PLAYBACK_HISTORY_CONCURRENCY = 6
+const MIN_PLAY_SECONDS = { Movie: 600, Episode: 300 }
+
+function normalizeId(id) {
+    return String(id || '').replaceAll('-', '').toLowerCase()
+}
+
+function localDay(timestamp) {
+    const date = new Date(timestamp)
+    const pad = number => String(number).padStart(2, '0')
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function getPlaybackHistoryPath() {
+    return path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'playback-history.json')
+}
+
+async function readPlaybackHistoryCache() {
+    try {
+        const parsed = JSON.parse(await readFile(getPlaybackHistoryPath(), 'utf8'))
+        return parsed && typeof parsed.days === 'object' ? parsed.days : {}
+    } catch (error) {
+        if (error.code !== 'ENOENT') console.warn(`[Jellyfin] Ignoring unreadable playback history cache: ${error.message}`)
+        return {}
+    }
+}
+
+async function writePlaybackHistoryCache(days) {
+    const cachePath = getPlaybackHistoryPath()
+    await mkdir(path.dirname(cachePath), { recursive: true })
+    const tmpPath = `${cachePath}.tmp`
+    await writeFile(tmpPath, JSON.stringify({ days }), 'utf8')
+    await rename(tmpPath, cachePath)
+}
+
+/**
+ * Play history of the last year as rows of { itemId, itemType, userId, day,
+ * playedAt, duration }, one per item, user and day. Returns null when the
+ * plugin is not available.
+ */
+async function getPlaybackHistory(now) {
+    let activity
+    try {
+        activity = await fetchFromJellyfin(
+            '/user_usage_stats/PlayActivity',
+            `?days=${PLAYBACK_ACTIVITY_DAYS}&endDate=${localDay(now)}&filter=Movie,Episode&dataType=count`,
+            'GET',
+            null,
+            WATCH_RANKING_TIMEOUT_MS
+        )
+        if (!Array.isArray(activity)) throw new Error('unexpected response')
+    } catch (error) {
+        console.warn(`[Jellyfin] Playback Reporting not available, using last play dates: ${error.message}`)
+        return null
+    }
+
+    const firstDay = localDay(now - PLAYBACK_HISTORY_DAYS * DAY_MS)
+    const cached = await readPlaybackHistoryCache()
+    const days = {} // "userId:day" -> { count, items }
+    const missing = []
+    let since = null
+
+    for (const user of activity) {
+        for (const [day, count] of Object.entries(user.user_usage || {})) {
+            if (!(count > 0)) continue
+            if (!since || day < since) since = day
+            if (day < firstDay) continue
+
+            const key = `${user.user_id}:${day}`
+            if (cached[key]?.count === count) {
+                days[key] = cached[key]
+            } else {
+                missing.push({ key, userId: user.user_id, day, count })
+            }
+        }
+    }
+
+    const queue = [...missing]
+    const worker = async () => {
+        for (let job = queue.shift(); job; job = queue.shift()) {
+            const items = await fetchFromJellyfin(`/user_usage_stats/${job.userId}/${job.day}/GetItems`, '?filter=Movie,Episode')
+            days[job.key] = {
+                count: job.count,
+                items: (Array.isArray(items) ? items : []).map(item => ({
+                    id: normalizeId(item.Id),
+                    type: item.Type,
+                    duration: Number(item.Duration) || 0,
+                })),
+            }
+        }
+    }
+    await Promise.all(Array.from({ length: PLAYBACK_HISTORY_CONCURRENCY }, worker))
+
+    if (missing.length > 0) {
+        console.info(`[INFO] Fetched playback history for ${missing.length} user days`)
+        await writePlaybackHistoryCache(days).catch(error => {
+            console.warn(`[Jellyfin] Could not store playback history cache: ${error.message}`)
+        })
+    }
+
+    // Several entries of one day (pause/resume) add up to one play
+    const rows = new Map()
+    for (const [key, entry] of Object.entries(days)) {
+        const [userId, day] = key.split(':')
+        for (const item of entry.items) {
+            const rowKey = `${key}:${item.id}`
+            const row = rows.get(rowKey) || {
+                itemId: item.id,
+                itemType: item.type,
+                userId: normalizeId(userId),
+                day,
+                playedAt: new Date(`${day}T12:00:00`).getTime(),
+                duration: 0,
+            }
+            row.duration += item.duration
+            rows.set(rowKey, row)
+        }
+    }
+
+    return { rows: [...rows.values()], since }
+}
 
 function emptyStats() {
     const stats = {}
@@ -243,13 +374,66 @@ function matchingPeriods(lastPlayedDate, now) {
         .map(([period]) => period)
 }
 
+/**
+ * Fill the time windows from the plugin's play history. Movies count one play
+ * per user and day, series count each episode once per user. Very short plays
+ * are ignored.
+ */
+async function applyPlaybackHistory(rows, movies, series, now) {
+    const episodes = await fetchFromJellyfin(
+        '/Items',
+        '?Recursive=true&IncludeItemTypes=Episode&EnableImages=false&EnableUserData=false&Fields=SeriesId',
+        'GET',
+        null,
+        WATCH_RANKING_TIMEOUT_MS
+    )
+    const seriesIdByEpisode = new Map()
+    for (const episode of episodes.Items || []) {
+        if (episode.SeriesId) seriesIdByEpisode.set(normalizeId(episode.Id), episode.SeriesId)
+    }
+    const movieById = new Map([...movies.values()].map(entry => [normalizeId(entry.id), entry]))
+
+    const windows = Object.entries(WATCH_RANKING_PERIODS).filter(([, days]) => days !== null)
+    const counted = new Set() // dedupe keys for viewers and episodes
+
+    for (const row of rows) {
+        if (row.duration < (MIN_PLAY_SECONDS[row.itemType] || 0)) continue
+
+        const entry = row.itemType === 'Movie'
+            ? movieById.get(row.itemId)
+            : series.get(seriesIdByEpisode.get(row.itemId))
+        if (!entry) continue // item no longer in the library
+
+        for (const [period, days] of windows) {
+            if (row.playedAt < now - days * DAY_MS) continue
+
+            const viewerKey = `${period}:${entry.id}:${row.userId}`
+            if (!counted.has(viewerKey)) {
+                counted.add(viewerKey)
+                entry.stats[period].viewers += 1
+            }
+
+            if (row.itemType === 'Movie') {
+                entry.stats[period].plays += 1
+            } else {
+                const episodeKey = `${viewerKey}:${row.itemId}`
+                if (!counted.has(episodeKey)) {
+                    counted.add(episodeKey)
+                    entry.stats[period].plays += 1
+                }
+            }
+        }
+    }
+}
+
 async function buildWatchRanking() {
-    const [users, libraryMovies, librarySeries] = await Promise.all([
+    const now = Date.now()
+    const [users, libraryMovies, librarySeries, history] = await Promise.all([
         fetchFromJellyfin('/Users'),
         getLibraryItems('Movie'),
         getLibraryItems('Series'),
+        getPlaybackHistory(now),
     ])
-    const now = Date.now()
 
     // Start with the whole library so never-watched titles can be looked up too
     const movies = new Map()
@@ -266,7 +450,7 @@ async function buildWatchRanking() {
         const seriesSeenByUser = new Set() // "seriesId:period"
 
         for (const item of data.Items || []) {
-            const periods = matchingPeriods(item.UserData?.LastPlayedDate, now)
+            const periods = history ? ['all'] : matchingPeriods(item.UserData?.LastPlayedDate, now)
 
             if (item.Type === 'Movie') {
                 if (!movies.has(item.Id)) {
@@ -295,10 +479,16 @@ async function buildWatchRanking() {
         }
     }
 
+    if (history) {
+        await applyPlaybackHistory(history.rows, movies, series, now)
+    }
+
     return {
         movies: [...movies.values()],
         series: [...series.values()],
         userCount: users.length,
+        periodSource: history ? 'playback-reporting' : 'last-played',
+        historySince: history?.since || null,
         generatedAt: new Date().toISOString(),
     }
 }

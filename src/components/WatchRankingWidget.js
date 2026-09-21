@@ -24,23 +24,36 @@ const VISIBLE_ENTRIES = 10
 const MAX_ENTRIES = 50
 
 const PERIODS = [
-    { key: 'all', label: 'Gesamt' },
-    { key: 'year', label: '12 Monate' },
-    { key: 'month', label: '30 Tage' },
-    { key: 'week', label: '7 Tage' },
+    { key: 'all', label: 'Gesamt', days: null },
+    { key: 'year', label: '12 Monate', days: 365 },
+    { key: 'month', label: '30 Tage', days: 30 },
+    { key: 'week', label: '7 Tage', days: 7 },
 ]
 
 const RANK_COLORS = ['text-yellow-400', 'text-gray-300', 'text-amber-600']
 
 function normalize(text) {
-    return (text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    return (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
-function entryDetails(stats, type, period) {
+/** Hint below the list about how reliable the selected time window is. */
+function periodNote(ranking, period) {
+    const days = PERIODS.find(({ key }) => key === period)?.days
+    if (!ranking || !days) return null
+    if (ranking.periodSource !== 'playback-reporting') {
+        return 'Jellyfin merkt sich pro Nutzer nur das letzte Abspielen. Im Zeitraum zählt, wer den Titel zuletzt darin gesehen hat.'
+    }
+    if (!ranking.historySince) return 'Für diesen Zeitraum liegen noch keine Abspieldaten vor.'
+    const since = new Date(`${ranking.historySince}T12:00:00`)
+    if (since.getTime() <= Date.now() - days * 24 * 60 * 60 * 1000) return null
+    return `Abspieldaten gibt es erst seit dem ${since.toLocaleDateString('de-DE')}.`
+}
+
+function entryDetails(stats, type, period, hasHistory) {
     if (stats.viewers === 0) return period === 'all' ? 'Noch nie gesehen' : 'In diesem Zeitraum nicht gesehen'
     if (type === 'series') return `${stats.plays} ${stats.plays === 1 ? 'Folge' : 'Folgen'} gesehen`
-    // Play counts only exist as lifetime totals
-    if (period !== 'all') return null
+    // Without play history, play counts only exist as lifetime totals
+    if (period !== 'all' && !hasHistory) return null
     return `${stats.plays}× abgespielt`
 }
 
@@ -114,6 +127,8 @@ export const WatchRankingWidget = () => {
     const limited = matching.slice(0, MAX_ENTRIES)
     const visibleEntries = showAll || searchTerm ? limited : limited.slice(0, VISIBLE_ENTRIES)
     const maxViewers = ranked[0]?.current.viewers || 0
+    const hasHistory = ranking?.periodSource === 'playback-reporting'
+    const note = periodNote(ranking, period)
 
     return (
         <AnimatePresence initial={false}>
@@ -226,7 +241,7 @@ export const WatchRankingWidget = () => {
 
                             <div className="flex flex-col gap-1.5">
                                 {visibleEntries.map((entry) => {
-                                    const details = entryDetails(entry.current, type, period)
+                                    const details = entryDetails(entry.current, type, period, hasHistory)
                                     const barWidth = maxViewers > 0 ? (entry.current.viewers / maxViewers) * 100 : 0
                                     return (
                                         <a
@@ -280,9 +295,9 @@ export const WatchRankingWidget = () => {
                                 </button>
                             )}
 
-                            {period !== 'all' && ranking && (
+                            {note && (
                                 <Typography variant="caption" className="text-gray-500 text-center">
-                                    Jellyfin merkt sich pro Nutzer nur das letzte Abspielen. Im Zeitraum zählt, wer den Titel zuletzt darin gesehen hat.
+                                    {note}
                                 </Typography>
                             )}
                         </div>
