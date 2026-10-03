@@ -39,7 +39,8 @@ export async function fetchFromJellyfin(endpoint, queryParams = '', method = 'GE
             const options = {
                 method,
                 headers: {
-                    'X-Emby-Token': process.env.JELLYFIN_API_KEY,
+                    // Jellyfin 12 no longer accepts the legacy X-Emby-Token header
+                    Authorization: `MediaBrowser Token="${process.env.JELLYFIN_API_KEY}"`,
                     'Content-Type': 'application/json',
                 },
                 signal: AbortSignal.timeout(timeoutMs),
