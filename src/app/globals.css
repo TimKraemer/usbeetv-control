@@ -17,3 +17,13 @@ body {
   background: var(--background);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Logo collage as a faint watermark behind the whole page */
+.page-watermark {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: url("/usbee-tv-logo.png") center / min(92vw, 720px) no-repeat;
+  opacity: 0.14;
+  pointer-events: none;
+}

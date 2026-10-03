@@ -18,7 +18,8 @@ export default function ClientWrapper({ children }) {
             <ThemeProvider theme={darkTheme}>
                 <CssBaseline />
                 <DownloadStateProvider>
-                    <div className="bg-black min-h-screen">
+                    <div className="bg-black min-h-screen relative isolate">
+                        <div aria-hidden="true" className="page-watermark" />
                         <div className="max-w-[1200px] mx-auto">
                             <main className="flex flex-col gap-6 sm:gap-8">
                                 {children}
