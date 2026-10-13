@@ -1,5 +1,5 @@
 import { findSeriesByTmdbId, getSeriesSeasonNumbers } from '@/app/lib/jellyfinApi'
-import { getTvShowDetails } from '@/app/lib/tmdbApi'
+import { getTvShowDetails, isSeriesEnded } from '@/app/lib/tmdbApi'
 import { NextResponse } from 'next/server'
 
 export async function GET(req) {
@@ -19,7 +19,7 @@ export async function GET(req) {
             getSeriesSeasonNumbers(matchedSeries.Id),
         ])
 
-        const isEnded = tvShowDetails.status === 'Ended'
+        const isEnded = isSeriesEnded(tvShowDetails)
         const totalSeasons = tvShowDetails.number_of_seasons
         const allSeasons = tvShowDetails.seasons || []
         const currentSeason = isEnded ? null : allSeasons.find(season => season.season_number === tvShowDetails.next_episode_to_air?.season_number) || null

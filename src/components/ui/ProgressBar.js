@@ -20,7 +20,6 @@ export const ProgressBar = ({
         if (color === 'error' || percentage > 80) return '#ef4444'
         if (color === 'warning' || percentage > 60) return '#f59e0b'
         if (color === 'success') return '#10b981'
-        if (color === 'paypal') return '#0070ba'
         return '#3b82f6'
     }
 

@@ -39,6 +39,22 @@ export async function POST(request) {
             return parseSeasonEpisode(row.name).season
         })
 
+        // Check every chosen season before sending any, so a language warning
+        // never leaves earlier seasons downloading behind the user's back
+        if (!force) {
+            for (const seasonNumber of selectedSeasons) {
+                const bestRow = seasonMap.get(Number(seasonNumber))
+                if (!bestRow) continue
+                const languageValidation = validateLanguage(bestRow, language, originalLanguage, 'tv')
+                if (!languageValidation.valid) {
+                    return NextResponse.json({
+                        languageWarning: languageValidation.warning,
+                        seasonNumber
+                    })
+                }
+            }
+        }
+
         const results = []
 
         for (const seasonNumber of selectedSeasons) {
@@ -50,16 +66,6 @@ export async function POST(request) {
                     error: `No torrent found for Season ${seasonNumber}`
                 })
                 continue
-            }
-
-            if (!force) {
-                const languageValidation = validateLanguage(bestRow, language, originalLanguage, 'tv')
-                if (!languageValidation.valid) {
-                    return NextResponse.json({
-                        languageWarning: languageValidation.warning,
-                        seasonNumber
-                    })
-                }
             }
 
             try {

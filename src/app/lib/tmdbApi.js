@@ -39,6 +39,11 @@ async function cachedDetails(key, loader) {
     return value
 }
 
+/** True when TMDB says no new episodes will come. */
+export function isSeriesEnded(tvShowDetails) {
+    return tvShowDetails.status === 'Ended' || tvShowDetails.status === 'Canceled'
+}
+
 /** Full TV show details (seasons, status, last/next episode, original language). */
 export function getTvShowDetails(tmdbId) {
     return cachedDetails(`tv:${tmdbId}`, () => fetchTmdb(`/tv/${tmdbId}`))

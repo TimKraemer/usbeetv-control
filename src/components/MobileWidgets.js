@@ -2,50 +2,23 @@
 
 import { LibraryScanButton } from '@/components/LibraryScanButton'
 import { ProgressBar } from '@/components/ui/ProgressBar'
-// PayPal pool imports disabled for now (widget hidden)
-// import { API_ENDPOINTS } from '@/constants/app'
-// import { formatCurrency, formatDate } from '@/utils/formatters'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import StorageIcon from '@mui/icons-material/Storage'
 import { Box, IconButton, Typography } from '@mui/material'
 import { AnimatePresence, motion } from 'framer-motion'
-// import Image from 'next/image' // PayPal widget hidden
 import { useEffect } from 'react'
 
 export const MobileWidgets = ({
     diskInfo,
-    // poolInfo, // PayPal widget hidden
     hasSearchResults = false,
     isCollapsed = false,
     onCollapsedChange,
 }) => {
-    // PayPal pool URL fetching disabled for now (widget hidden)
-    // const [paypalPoolUrl, setPaypalPoolUrl] = useState(null)
-    // useEffect(() => {
-    //     const fetchPaypalPoolUrl = async () => {
-    //         try {
-    //             const response = await fetch(API_ENDPOINTS.PAYPAL_POOL_URL)
-    //             if (response.ok) {
-    //                 const data = await response.json()
-    //                 setPaypalPoolUrl(data.url)
-    //             }
-    //         } catch (error) {
-    //             console.error('Failed to fetch PayPal pool URL:', error)
-    //         }
-    //     }
-    //     fetchPaypalPoolUrl()
-    // }, [])
-
     // Defensive: Only parse if usePercent is a string
     const usePercent = (typeof diskInfo?.usePercent === 'string' && diskInfo.usePercent.includes('%'))
         ? Number.parseInt(diskInfo.usePercent.replace('%', ''))
         : 0
     const isLowSpace = usePercent > 80
-
-    // PayPal pool progress calculation disabled for now (widget hidden)
-    // const progressPercent = (typeof poolInfo?.currentAmount === 'number' && typeof poolInfo?.targetAmount === 'number' && poolInfo.targetAmount > 0)
-    //     ? (poolInfo.currentAmount / poolInfo.targetAmount) * 100
-    //     : 0
 
     // Auto-collapse when search has results
     useEffect(() => {
@@ -56,19 +29,9 @@ export const MobileWidgets = ({
         }
     }, [hasSearchResults, onCollapsedChange])
 
-    // PayPal click handler disabled for now (widget hidden)
-    // const handlePayPalClick = () => {
-    //     if (isCollapsed) {
-    //         onCollapsedChange?.(false)
-    //     } else if (paypalPoolUrl && paypalPoolUrl !== "__PAYPAL_POOL_URL_NOT_SET__") {
-    //         window.open(paypalPoolUrl, '_blank')
-    //     }
-    // }
-
     const handleDiskClick = () => {
         onCollapsedChange?.(!isCollapsed)
     }
-
 
     return (
         <AnimatePresence initial={false}>
@@ -111,41 +74,6 @@ export const MobileWidgets = ({
                                 </Typography>
                             </div>
                         </motion.div>
-
-                        {/* PayPal Pool Widget - Collapsed (hidden for now)
-                        <motion.div
-                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-2 flex flex-col items-center justify-center min-w-0 cursor-pointer"
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            onClick={handlePayPalClick}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <div className="flex items-center gap-2 w-full">
-                                <Image
-                                    src="/euro4ssd.svg"
-                                    alt="Euro4SSD"
-                                    width={20}
-                                    height={20}
-                                    className="w-5 h-5"
-                                />
-                                <div className="flex-1">
-                                    <ProgressBar
-                                        value={progressPercent}
-                                        maxValue={100}
-                                        color="paypal"
-                                        height={4}
-                                        showValue={false}
-                                        animated={true}
-                                    />
-                                </div>
-                                <Typography variant="caption" color="textSecondary" className="font-medium whitespace-nowrap">
-                                    {poolInfo ? formatCurrency(poolInfo.currentAmount) : 'N/A'} | {progressPercent.toFixed(0)}%
-                                </Typography>
-                            </div>
-                        </motion.div>
-                        */}
                     </div>
                 ) : (
                     // Uncollapsed state - full widgets
@@ -205,79 +133,6 @@ export const MobileWidgets = ({
                                 </Typography>
                             </Box>
                         </motion.div>
-
-                        {/* PayPal Pool Widget - Uncollapsed (hidden for now)
-                        <motion.div
-                            className="flex-1 bg-white/5 rounded-lg border border-gray-600 p-3 flex flex-col min-w-0 cursor-pointer"
-                            initial={{ scale: 0.8, opacity: 0 }}
-                            animate={{ scale: 1, opacity: 1 }}
-                            transition={{ delay: 0.2 }}
-                            onClick={handlePayPalClick}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <div className="flex justify-between mb-2">
-                                <div className="flex items-center gap-2">
-                                    <Image
-                                        src="/euro4ssd.svg"
-                                        alt="Euro4SSD"
-                                        width={64}
-                                        height={64}
-                                        className="w-16 h-16"
-                                    />
-                                    <Typography variant="caption" color="textSecondary" className="font-medium">
-                                        Die neue 4TB SSD ist da! :D - Danke!!
-                                    </Typography>
-                                </div>
-                                <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                        e.stopPropagation()
-                                        e.preventDefault()
-                                        handleDiskClick()
-                                    }}
-                                    className="ml-auto"
-                                    sx={{
-                                        color: 'text.secondary',
-                                        '&:hover': {
-                                            backgroundColor: 'rgba(255, 255, 255, 0.08)'
-                                        }
-                                    }}
-                                >
-                                    <ExpandMoreIcon
-                                        sx={{
-                                            transform: isCollapsed ? 'rotate(180deg)' : 'rotate(0deg)',
-                                            transition: 'transform 0.2s ease-in-out'
-                                        }}
-                                    />
-                                </IconButton>
-                            </div>
-                            <ProgressBar
-                                value={progressPercent}
-                                maxValue={100}
-                                color="paypal"
-                                height={8}
-                                showValue={false}
-                                animated={true}
-                            />
-                            <Box className="flex justify-between items-center mt-2">
-                                <Typography variant="body2" color="textSecondary">
-                                    {formatCurrency(poolInfo?.currentAmount || 0)} / {formatCurrency(poolInfo?.targetAmount || 0)}
-                                </Typography>
-                                <Typography variant="body2" color="textSecondary" className="font-medium">
-                                    {progressPercent.toFixed(1)}%
-                                </Typography>
-                            </Box>
-                            <Box className="flex justify-between mt-2 pt-2 border-t border-gray-200">
-                                <Typography variant="caption" color="textSecondary">
-                                    {poolInfo?.contributors || 0} Beiträge
-                                </Typography>
-                                <Typography variant="caption" color="textSecondary">
-                                    Stand: {poolInfo?.lastUpdated ? formatDate(poolInfo.lastUpdated) : 'N/A'}
-                                </Typography>
-                            </Box>
-                        </motion.div>
-                        */}
                     </div>
                 )}
             </motion.div>

@@ -1,6 +1,5 @@
 'use client'
 
-import { API_ENDPOINTS } from '@/constants/app'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import { Alert, IconButton, Snackbar, Tooltip } from '@mui/material'
 import { useEffect, useState } from 'react'
@@ -30,7 +29,7 @@ export const LibraryScanButton = ({ isVisible = false }) => {
 
         const loadCooldown = async () => {
             try {
-                const response = await fetch(API_ENDPOINTS.LIBRARY_SCAN)
+                const response = await fetch('/api/library/scan')
                 if (!response.ok) return
                 const data = await response.json()
                 const remaining = data.cooldown?.remainingMs || 0
@@ -71,7 +70,7 @@ export const LibraryScanButton = ({ isVisible = false }) => {
         setShowCooldown(false)
 
         try {
-            const response = await fetch(API_ENDPOINTS.LIBRARY_SCAN, {
+            const response = await fetch('/api/library/scan', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

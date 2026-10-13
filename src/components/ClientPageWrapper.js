@@ -77,16 +77,13 @@ export const ClientPageWrapper = () => {
                                                 </Typography>
                                                 <Typography variant="caption" className="text-blue-200">
                                                     {download.type === 'movie' ? 'Film' : 'Serie'} • {download.state}
-                                                    {download.reconnected && (
-                                                        <span className="text-yellow-300 ml-1">• aus vorheriger Sitzung</span>
-                                                    )}
                                                 </Typography>
                                             </div>
                                             <Tooltip title="Download abbrechen">
                                                 <IconButton
                                                     onClick={() => handleCancelDownload(download.torrentId)}
                                                     size="small"
-                                                    disabled={cancellingDownloads.has(download.torrentId)}
+                                                    disabled={cancellingDownloads.has(download.torrentId) || download.progress >= 100}
                                                     className="text-red-300 hover:text-red-100 ml-2"
                                                 >
                                                     <CancelIcon />
@@ -97,32 +94,24 @@ export const ClientPageWrapper = () => {
                                         <div className="space-y-1">
                                             <div className="flex justify-between items-center">
                                                 <Typography variant="caption" className="text-blue-200">
-                                                    {download.reconnected ? 'N/A' : `${download.progress}%`}
+                                                    {download.progress}%
                                                 </Typography>
                                                 <Typography variant="caption" className="text-blue-200">
-                                                    ETA: {download.reconnected ? 'N/A' : formatEta(download.eta)}
+                                                    ETA: {formatEta(download.eta)}
                                                 </Typography>
                                             </div>
-                                            {download.reconnected ? (
-                                                <div className="h-2 bg-gray-600/20 rounded-full flex items-center justify-center">
-                                                    <Typography variant="caption" className="text-gray-400 text-xs">
-                                                        Keine Echtzeit-Updates verfügbar
-                                                    </Typography>
-                                                </div>
-                                            ) : (
-                                                <LinearProgress
-                                                    variant="determinate"
-                                                    value={download.progress}
-                                                    className="h-2 rounded-full"
-                                                    sx={{
-                                                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                                                        '& .MuiLinearProgress-bar': {
-                                                            backgroundColor: '#3b82f6',
-                                                            borderRadius: 'inherit'
-                                                        }
-                                                    }}
-                                                />
-                                            )}
+                                            <LinearProgress
+                                                variant="determinate"
+                                                value={download.progress}
+                                                className="h-2 rounded-full"
+                                                sx={{
+                                                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                                                    '& .MuiLinearProgress-bar': {
+                                                        backgroundColor: '#3b82f6',
+                                                        borderRadius: 'inherit'
+                                                    }
+                                                }}
+                                            />
                                         </div>
                                     </motion.div>
                                 ))}

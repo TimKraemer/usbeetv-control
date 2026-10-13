@@ -11,7 +11,6 @@ A Next.js application for managing movie and TV show downloads to USBee TV, with
 - **Progress Tracking**: Real-time download progress monitoring
 - **Multi-language Support**: German and English interface
 - **Disk Space Monitoring**: Real-time storage space monitoring
-- **PayPal Pool Integration**: Track contribution progress for new SSD
 
 ## Getting Started
 
@@ -69,15 +68,8 @@ SUBSCRIPTION_CHECK_INTERVAL_MINUTES="30"
 DOWNLOAD_WATCH_INTERVAL_SECONDS="60"
 LIBRARY_SCAN_COOLDOWN_SECONDS="300"
 
-# Pool editor (/pool-edit) password, checked server-side
-POOL_EDIT_PASSWORD=
-
-# PayPal Pool Configuration
-PAYPAL_POOL_URL="https://www.paypal.com/pool/9g4yQj1qn7"
-PAYPAL_POOL_CURRENT_AMOUNT="125.50"
-PAYPAL_POOL_TARGET_AMOUNT="500.00"
-PAYPAL_POOL_CONTRIBUTORS="8"
-PAYPAL_POOL_LAST_UPDATED="2025-06-27T15:30:00.000Z"
+# Optional HTTP basic auth for the whole app ("user:password"), off when empty
+APP_BASIC_AUTH=
 ```
 
 ## TV Show Season Selection
@@ -127,7 +119,6 @@ The application automatically triggers Jellyfin library scans when downloads com
 - `/api/library/movies` - Check if movie exists in Jellyfin
 - `/api/library/tvshows` - Check if TV show exists in Jellyfin
 - `/api/disk-space` - Get storage information
-- `/api/paypal-pool-status` - Get PayPal pool status
 
 ## Learn More
 

@@ -1,49 +1,9 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { createListStore } from '@/app/lib/jsonStore'
 
-function getDataDir() {
-    return process.env.DATA_DIR || path.join(process.cwd(), 'data')
-}
-
-function getStorePath() {
-    return path.join(getDataDir(), 'pending-downloads.json')
-}
-
-let writeQueue = Promise.resolve()
+const { read: readStore, update: updateStore } = createListStore('pending-downloads.json', 'pending')
 
 function normalizeHash(hash) {
     return String(hash || '').trim().toLowerCase()
-}
-
-async function readStore() {
-    try {
-        const raw = await readFile(getStorePath(), 'utf8')
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed.pending) ? parsed.pending : []
-    } catch (error) {
-        if (error.code === 'ENOENT') return []
-        console.error('[PendingDownloads] Failed to read store, starting empty:', error.message)
-        return []
-    }
-}
-
-async function writeStore(pending) {
-    const storePath = getStorePath()
-    await mkdir(path.dirname(storePath), { recursive: true })
-    const tmpPath = `${storePath}.tmp`
-    await writeFile(tmpPath, JSON.stringify({ pending }, null, 2), 'utf8')
-    await rename(tmpPath, storePath)
-}
-
-async function updateStore(mutator) {
-    const task = writeQueue.then(async () => {
-        const pending = await readStore()
-        const result = await mutator(pending)
-        await writeStore(pending)
-        return result
-    })
-    writeQueue = task.catch(() => {})
-    return task
 }
 
 export async function getPendingDownloads() {

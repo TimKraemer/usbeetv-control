@@ -24,19 +24,10 @@ RUN /root/.bun/bin/bun --version && \
     else /root/.bun/bin/bun install; \
     fi
 
-# Rebuild the source code only when needed
-FROM git AS builder
+# Build on top of deps, which already has bun and node_modules
+FROM deps AS builder
 WORKDIR /app
 
-# Install curl, unzip and bun for build
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl unzip && \
-    curl -fsSL https://bun.sh/install | bash && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-ENV PATH="/root/.bun/bin:${PATH}"
-
-COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Next.js collects completely anonymous telemetry data about general usage.

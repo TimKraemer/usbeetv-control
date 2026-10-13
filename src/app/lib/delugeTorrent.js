@@ -5,19 +5,17 @@ const DELUGE_NOT_AUTHENTICATED = 1
 
 let rpcId = 100
 
-export function isTorrentComplete(progress, state) {
-    if (state !== 'Seeding' && state !== 'Paused') return false
-    const value = Number(progress)
-    if (Number.isNaN(value)) return false
-    // Deluge reports progress as 0–100 or 0–1 depending on the method
-    const ratio = value > 1 ? value / 100 : value
-    return ratio >= 0.999
-}
-
 export function torrentProgressRatio(progress) {
     const value = Number(progress)
     if (Number.isNaN(value)) return 0
+    // Deluge reports progress as 0–100 or 0–1 depending on the method
     return value > 1 ? value / 100 : value
+}
+
+/** Finished torrents can also sit in the seed queue as "Queued"; while checking, progress is the check progress. */
+export function isTorrentComplete(progress, state) {
+    if (state === 'Checking' || state === 'Error') return false
+    return torrentProgressRatio(progress) >= 0.999
 }
 
 export function findTorrentStatus(torrents, hash) {
@@ -95,25 +93,8 @@ export async function forceRecheck(sessionId, hashes) {
     await delugeRpc(sessionId, 'core.force_recheck', [ids])
 }
 
-export async function pauseTorrents(sessionId, hashes) {
-    const ids = normalizeHashes(hashes)
-    if (ids.length === 0) return
-    await delugeRpc(sessionId, 'core.pause_torrent', [ids])
-}
-
-export async function resumeTorrents(sessionId, hashes) {
-    const ids = normalizeHashes(hashes)
-    if (ids.length === 0) return
-    await delugeRpc(sessionId, 'core.resume_torrent', [ids])
-}
-
 export async function queueTop(sessionId, hashes) {
     const ids = normalizeHashes(hashes)
     if (ids.length === 0) return
     await delugeRpc(sessionId, 'core.queue_top', [ids])
-}
-
-export async function setAutoManaged(sessionId, hash, enabled) {
-    if (!hash) return
-    await delugeRpc(sessionId, 'core.set_auto_managed', [String(hash).toLowerCase(), enabled])
 }

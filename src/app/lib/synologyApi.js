@@ -1,3 +1,4 @@
+import { formatBytes } from '@/utils/formatters'
 import { Agent, fetch as undiciFetch } from 'undici'
 
 const SYNOLOGY_TIMEOUT_MS = 8000
@@ -132,9 +133,9 @@ class SynologyAPI {
 
         return {
             filesystem: volume.id,
-            size: this.formatBytes(totalSize),
-            used: this.formatBytes(usedSize),
-            available: this.formatBytes(availableSize),
+            size: formatBytes(totalSize),
+            used: formatBytes(usedSize),
+            available: formatBytes(availableSize),
             usePercent: `${usePercent}%`,
             mounted: volume.vol_path || '/',
             path: volume.vol_desc || volume.id,
@@ -145,14 +146,6 @@ class SynologyAPI {
             spaceStatus: volume.space_status?.status
         }
     }
-
-    formatBytes(bytes) {
-        if (!bytes || bytes <= 0) return '0 B'
-        const k = 1024
-        const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-        const i = Math.min(Math.floor(Math.log(bytes) / Math.log(k)), sizes.length - 1)
-        return `${Number.parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
-    }
 }
 
 let sharedInstance = null
@@ -162,5 +155,3 @@ export function getSynologyApi() {
     if (!sharedInstance) sharedInstance = new SynologyAPI()
     return sharedInstance
 }
-
-export default SynologyAPI

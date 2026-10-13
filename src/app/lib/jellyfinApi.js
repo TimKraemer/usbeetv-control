@@ -1,5 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { dataPath, writeJsonFile } from '@/app/lib/jsonStore'
 import { Agent, fetch as undiciFetch } from 'undici'
 
 const JELLYFIN_TIMEOUT_MS = 5000
@@ -205,17 +205,6 @@ export async function triggerLibraryScan() {
     }
 }
 
-export async function getLibraryFolders() {
-    try {
-        const result = await fetchFromJellyfin('/Library/VirtualFolders')
-        console.info('[INFO] Retrieved library folders from Jellyfin')
-        return result
-    } catch (error) {
-        console.error('[ERROR] Failed to get library folders from Jellyfin:', error.message)
-        throw error
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Watch ranking: Jellyfin only stores play data per user, so the ranking is
 // built by reading every user's played items and adding them up.
@@ -269,7 +258,7 @@ function localDay(timestamp) {
 }
 
 function getPlaybackHistoryPath() {
-    return path.join(process.env.DATA_DIR || path.join(process.cwd(), 'data'), 'playback-history.json')
+    return dataPath('playback-history.json')
 }
 
 async function readPlaybackHistoryCache() {
@@ -282,12 +271,8 @@ async function readPlaybackHistoryCache() {
     }
 }
 
-async function writePlaybackHistoryCache(days) {
-    const cachePath = getPlaybackHistoryPath()
-    await mkdir(path.dirname(cachePath), { recursive: true })
-    const tmpPath = `${cachePath}.tmp`
-    await writeFile(tmpPath, JSON.stringify({ version: PLAYBACK_CACHE_VERSION, days }), 'utf8')
-    await rename(tmpPath, cachePath)
+function writePlaybackHistoryCache(days) {
+    return writeJsonFile(getPlaybackHistoryPath(), { version: PLAYBACK_CACHE_VERSION, days })
 }
 
 /**

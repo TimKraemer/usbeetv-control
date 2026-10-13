@@ -1,49 +1,6 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { createListStore } from '@/app/lib/jsonStore'
 
-function getDataDir() {
-    return process.env.DATA_DIR || path.join(process.cwd(), 'data')
-}
-
-function getStorePath() {
-    return path.join(getDataDir(), 'subscriptions.json')
-}
-
-// Serialize writes so concurrent updates (scheduler + API) don't clobber each other
-let writeQueue = Promise.resolve()
-
-async function readStore() {
-    try {
-        const raw = await readFile(getStorePath(), 'utf8')
-        const parsed = JSON.parse(raw)
-        return Array.isArray(parsed.subscriptions) ? parsed.subscriptions : []
-    } catch (error) {
-        if (error.code === 'ENOENT') return []
-        console.error('[SubscriptionStore] Failed to read store, starting empty:', error.message)
-        return []
-    }
-}
-
-async function writeStore(subscriptions) {
-    const storePath = getStorePath()
-    await mkdir(path.dirname(storePath), { recursive: true })
-    const tmpPath = `${storePath}.tmp`
-    await writeFile(tmpPath, JSON.stringify({ subscriptions }, null, 2), 'utf8')
-    await rename(tmpPath, storePath)
-}
-
-/** Run a read-modify-write transaction against the store, serialized. */
-async function updateStore(mutator) {
-    const task = writeQueue.then(async () => {
-        const subscriptions = await readStore()
-        const result = await mutator(subscriptions)
-        await writeStore(subscriptions)
-        return result
-    })
-    // Keep the queue alive even if this task fails
-    writeQueue = task.catch(() => {})
-    return task
-}
+const { read: readStore, update: updateStore } = createListStore('subscriptions.json', 'subscriptions')
 
 export async function getSubscriptions() {
     return readStore()

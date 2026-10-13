@@ -1,4 +1,4 @@
-import { findSeriesByTmdbId, getSeriesEpisodeKeys } from '@/app/lib/jellyfinApi'
+import { getLibraryItemsByTmdbId, getSeriesEpisodeKeys } from '@/app/lib/jellyfinApi'
 import { sendToDeluge } from '@/app/lib/sendToDeluge'
 import {
     getSubscriptions,
@@ -6,7 +6,7 @@ import {
     markSubscriptionChecked,
     setSubscriptionActive,
 } from '@/app/lib/subscriptionStore'
-import { getTvShowDetails } from '@/app/lib/tmdbApi'
+import { getTvShowDetails, isSeriesEnded } from '@/app/lib/tmdbApi'
 import {
     fetchTorrentsByTmdbId,
     getDownloadUrl,
@@ -18,12 +18,19 @@ import {
     sortTorrents,
 } from '@/app/lib/tsApi'
 
+// shortcut: a series new to the library arrives in batches (one batch per check), raise if that is too slow
+const MAX_DOWNLOADS_PER_CHECK = 12
+
 /**
  * Episodes (as "S:E" strings) that physically exist in Jellyfin for a series.
  * Virtual items (missing/unaired placeholders) are excluded.
  */
 async function getEpisodesInJellyfin(tmdbId) {
-    const matchedSeries = await findSeriesByTmdbId(tmdbId)
+    const seriesByTmdbId = await getLibraryItemsByTmdbId('Series')
+    // No series at all means Jellyfin answered without data; treating that as
+    // "nothing downloaded yet" would fetch every subscribed series again
+    if (seriesByTmdbId.size === 0) throw new Error('Jellyfin returned no series with a TMDB id')
+    const matchedSeries = seriesByTmdbId.get(String(tmdbId))
     if (!matchedSeries) return new Set()
     return getSeriesEpisodeKeys(matchedSeries.Id)
 }
@@ -33,7 +40,7 @@ async function getEpisodesInJellyfin(tmdbId) {
  * Uses last_episode_to_air as the watermark: every episode before/at that
  * point counts as aired (past seasons fully, current season up to last aired).
  */
-function getAllAiredEpisodes(tvShowDetails) {
+export function getAllAiredEpisodes(tvShowDetails) {
     const lastEpisode = tvShowDetails.last_episode_to_air
     if (!lastEpisode?.season_number || !lastEpisode?.episode_number) return []
 
@@ -65,7 +72,7 @@ export async function checkSubscription(subscription) {
     try {
         const tvShowDetails = await getTvShowDetails(tmdbId)
         const originalLanguage = tvShowDetails.original_language || null
-        const isEnded = tvShowDetails.status === 'Ended' || tvShowDetails.status === 'Canceled'
+        const isEnded = isSeriesEnded(tvShowDetails)
 
         const airedEpisodes = getAllAiredEpisodes(tvShowDetails)
         if (airedEpisodes.length === 0) {
@@ -115,6 +122,10 @@ export async function checkSubscription(subscription) {
             const key = `${season}:${episode}`
             const row = bestByEpisode.get(key)
             if (!row) continue
+            if (downloads.length >= MAX_DOWNLOADS_PER_CHECK) {
+                console.warn(`[Subscriptions] ${label}: ${MAX_DOWNLOADS_PER_CHECK} downloads sent, the rest follows in the next check`)
+                break
+            }
 
             try {
                 const result = await sendToDeluge(getDownloadUrl(row.id), 'tv')

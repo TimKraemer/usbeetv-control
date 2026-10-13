@@ -1,5 +1,5 @@
 import { findSeriesByTmdbId, getSeriesSeasonNumbers } from '@/app/lib/jellyfinApi'
-import { getTvShowDetails } from '@/app/lib/tmdbApi'
+import { getTvShowDetails, isSeriesEnded } from '@/app/lib/tmdbApi'
 import {
     fetchTorrentsByTmdbId,
     isSeasonPack,
@@ -41,7 +41,7 @@ export async function GET(request) {
             fetchTorrentsByTmdbId(tmdbId, 'series'),
         ])
 
-        const isEnded = tvShowDetails.status === 'Ended'
+        const isEnded = isSeriesEnded(tvShowDetails)
         const totalSeasons = tvShowDetails.number_of_seasons
         const allSeasons = tvShowDetails.seasons || []
         const originalLanguage = tvShowDetails.original_language || null
